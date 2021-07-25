@@ -1,4 +1,3 @@
-// eslint-disable-next-line import/no-extraneous-dependencies
 const sassResourcesLoader = require('craco-sass-resources-loader');
 const path = require('path');
 
@@ -18,6 +17,9 @@ module.exports = {
       '@constants': path.resolve(__dirname, 'src/constants/'),
       '@assets': path.resolve(__dirname, 'src/assets/'),
       '@pages': path.resolve(__dirname, 'src/pages/'),
+      '@PO': path.resolve(__dirname, 'src/PO/'),
+      '@utils': path.resolve(__dirname, 'src/utils/'),
+      '@interfaces': path.resolve(__dirname, 'src/interfaces/'),
     },
   },
 };

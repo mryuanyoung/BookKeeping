@@ -17,6 +17,15 @@
       "@assets/*": [
         "src/assets/*"
       ],
+      "@PO/*": [
+        "src/PO/*"
+      ],
+      "@pages/*": [
+        "src/pages/*"
+      ],
+      "@interfaces/*": [
+        "src/interfaces/*"
+      ],
     }
   }
 }
