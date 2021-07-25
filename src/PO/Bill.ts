@@ -27,10 +27,10 @@ export class ImportBill implements ImportBillT{
   type: ImportBillType;
   unix: number;
 
-  constructor(amount: number, remark: string, type: ImportBillType){
-    this.date = getNowDate();
+  constructor(amount: number, remark: string, type: ImportBillType, date: DateReq){
     this.time = getNowTime();
     this.unix = getUnix();
+    this.date = date;
     this.mode = BillType.Import;
     this.amount = amount;
     this.remark = remark;
@@ -47,10 +47,10 @@ export class ExportBill implements ExportBillT{
   type: ExportBillType;
   unix: number;
 
-  constructor(amount: number, remark: string, type: ExportBillType){
-    this.date = getNowDate();
+  constructor(amount: number, remark: string, type: ExportBillType, date: DateReq){
     this.time = getNowTime();
     this.unix = getUnix();
+    this.date = date;
     this.mode = BillType.Export;
     this.amount = amount;
     this.remark = remark;

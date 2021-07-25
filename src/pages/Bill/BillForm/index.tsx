@@ -1,5 +1,4 @@
-import React, { useState, useEffect, Dispatch, SetStateAction } from "react";
-
+import React, { useState, useEffect, Dispatch, SetStateAction, useContext, useCallback } from "react";
 import Radio from '@material-ui/core/Radio';
 import RadioGroup from '@material-ui/core/RadioGroup';
 import FormControlLabel from '@material-ui/core/FormControlLabel';
@@ -8,24 +7,55 @@ import FormLabel from '@material-ui/core/FormLabel';
 import Box from '@material-ui/core/Box';
 import Button from '@material-ui/core/Button';
 import Divider from '@material-ui/core/Divider';
+import TextField from '@material-ui/core/TextField';
+import AdapterDateFns from '@material-ui/lab/AdapterMoment';
+import LocalizationProvider from '@material-ui/lab/LocalizationProvider';
+import DatePicker from '@material-ui/lab/DatePicker';
+import moment from 'moment';
 
 import Input from '@components/Input';
 import useBillOperator from "@hooks/useBillOperator";
 import { BillType, ExportBillType, ExportBillLabel, ImportBillType, ImportBillLabel } from '@PO/enums';
+import { defaultBillForm } from "@constants/bill";
+import { Bill } from "@PO/Bill";
 
 interface Props {
   setFresh: Dispatch<SetStateAction<boolean>>;
+  initData: Bill,
+  setFormData: Dispatch<SetStateAction<Bill>>
 }
 
 const BillForm: React.FC<Props> = (props) => {
 
-  const { setFresh } = props;
+  const { setFresh, initData, setFormData } = props;
+  const { createBill, updateBill, deleteBill } = useBillOperator();
 
-  const [amount, setAmount] = useState('');
-  const [mode, setMode] = useState(BillType.Export);
-  const [type, setType] = useState<ExportBillType | ImportBillType>(ExportBillType.Meal);
-  const [remark, setRemark] = useState('');
-  const { createBill } = useBillOperator();
+  const Amount = initData.unix ? initData.amount + '' : '';
+  const [amount, setAmount] = useState(Amount);
+  const [mode, setMode] = useState(initData.mode);
+  const [type, setType] = useState(initData.type);
+  const [remark, setRemark] = useState(initData.remark);
+  const [date, setDate] = useState<moment.Moment | null>(moment());
+
+
+  const initForm = () => {
+    const Amount = initData.unix ? initData.amount + '' : '';
+    setAmount(Amount);
+    setMode(initData.mode);
+    setType(initData.type);
+    setRemark(initData.remark);
+  };
+
+  const clearForm = useCallback(() => {
+    setAmount('');
+    setMode(BillType.Export);
+    setType(ExportBillType.Meal);
+    setRemark('');
+  }, []);
+
+  useEffect(() => {
+    initForm();
+  }, [initData]);
 
   useEffect(() => {
     if (mode === BillType.Export) {
@@ -37,11 +67,44 @@ const BillForm: React.FC<Props> = (props) => {
   }, [mode]);
 
   const handleSubmit = () => {
+    // 粗糙的表单验证;
     const AMOUNT = parseFloat(amount) || 0;
     if (AMOUNT === 0) return;
-    createBill(AMOUNT, mode, type, remark);
+    const dateReq = {
+      year: date!.year(),
+      month: date!.month() + 1,
+      day: date!.date(),
+    };
+
+    if (initData.unix) {
+      const target = {
+        ...initData,
+        amount: AMOUNT,
+        date: dateReq,
+        mode,
+        type,
+        remark,
+      };
+      updateBill(target);
+    }
+    else {
+      createBill({ amount: AMOUNT, date: dateReq, mode, type, remark });
+    }
     setFresh(b => !b);
+    clearForm();
   };
+
+  const handleDelete = (unix: number) => {
+    const dateReq = {
+      year: date!.year(),
+      month: date!.month() + 1,
+      day: date!.date(),
+    };
+
+    deleteBill(unix, dateReq);
+    setFormData(defaultBillForm);
+    setFresh(b => !b);
+  }
 
   return (
     <Box
@@ -52,6 +115,17 @@ const BillForm: React.FC<Props> = (props) => {
       noValidate
       autoComplete="off"
     >
+      <LocalizationProvider dateAdapter={AdapterDateFns}>
+        <DatePicker
+          label="日期"
+          value={date}
+          onChange={(newDate: moment.Moment | null) => {
+            if (!newDate) return;
+            setDate(newDate);
+          }}
+          renderInput={(params: any) => <TextField {...params} />}
+        />
+      </LocalizationProvider>
       <FormControl component="fieldset">
         <FormLabel component="legend">类型</FormLabel>
         <RadioGroup row value={mode} onChange={(e) => setMode(e.target.value as BillType)}>
@@ -60,7 +134,7 @@ const BillForm: React.FC<Props> = (props) => {
         </RadioGroup>
       </FormControl>
       <Divider variant='middle' />
-      <Input value={amount} setValue={setAmount} number outlined prefix='￥' label='金额' errMsg='请输入数字'/>
+      <Input value={amount} setValue={setAmount} number outlined prefix='￥' label='金额' errMsg='请输入数字' />
       <Divider variant='middle' />
       <FormControl component="fieldset">
         <FormLabel component="legend">类别</FormLabel>
@@ -85,7 +159,15 @@ const BillForm: React.FC<Props> = (props) => {
       <Divider variant='middle' />
       <Input value={remark} setValue={setRemark} outlined label='备注' />
       <Divider variant='middle' />
-      <Button variant="outlined" onClick={handleSubmit}>提交</Button>
+      <Button variant="outlined" onClick={handleSubmit}>{initData.unix ? '修改' : '记账'}</Button>
+      {
+        initData.unix ? (
+          <>
+            <Button variant="outlined" color="error" onClick={() => handleDelete(initData.unix)}>删除</Button>
+            <Button variant="outlined" onClick={() => setFormData(defaultBillForm)}>返回</Button>
+          </>
+        ) : null
+      }
     </Box>
 
   )
