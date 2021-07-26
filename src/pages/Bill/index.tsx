@@ -1,9 +1,10 @@
 import React, { useState, createContext, Dispatch, SetStateAction } from "react";
 import style from './index.module.scss';
-import BillForm from './BillForm';
+import BillForm from '../../components/BillForm';
 import DayConsuption from '@components/DayConsumption';
 
 import { defaultBillForm } from "@constants/bill";
+import { Divider } from "@material-ui/core";
 
 const BillPage = function () {
 
@@ -13,6 +14,7 @@ const BillPage = function () {
   return (
     <div className={style.page}>
       <BillForm setFresh={setFresh} initData={formData} setFormData={setFormData} />
+      <Divider variant='fullWidth' />
       <DayConsuption fresh={fresh} setFormData={setFormData} />
     </div>
   )

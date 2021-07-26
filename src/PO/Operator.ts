@@ -1,5 +1,5 @@
 import { Bill } from './Bill';
-import { getNowDate } from '@utils/calendar';
+import { getNowDate, getNowTime, getUnix, sameDate } from '@utils/calendar';
 import { RootContainer } from './BillContainer';
 import { DateReq, DayContainer, SpanContainer } from './interfaces';
 import { replaceRootContainer } from '@utils/localStore';
@@ -25,17 +25,26 @@ export function create(bill: Bill, root: RootContainer) {
   replaceRootContainer(root);
 }
 
-export function update(bill: Bill, root: RootContainer) {
+export function update(bill: Bill, root: RootContainer, sourceDate: DateReq) {
   // todo 从记账页面将当日账单修改为其他日期的账单时，会有bug
   const unique_unix = bill.unix;
-  const { dayCont } = findContainers(root, bill.date);
-  for (let i = 0, len = dayCont.bills.length; i < len; i++) {
-    const item = dayCont.bills[i];
-    if (item.unix === unique_unix) {
-      dayCont.bills[i] = bill;
-      break;
-    }
-  };
+  const { dayCont: target } = findContainers(root, bill.date);
+  if (!sameDate(sourceDate, bill.date)) {
+    //target中添加
+    bill.time = getNowTime();
+    target.bills.push(bill);
+    //source中删除
+    del(bill.unix, sourceDate, root);
+  }
+  else {
+    for (let i = 0, len = target.bills.length; i < len; i++) {
+      const item = target.bills[i];
+      if (item.unix === unique_unix) {
+        target.bills[i] = bill;
+        break;
+      }
+    };
+  }
   replaceRootContainer(root);
 }
 

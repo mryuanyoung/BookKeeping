@@ -26,3 +26,7 @@ export function getNowTime(): TimeReq{
 export function getUnix(){
   return moment().unix();
 }
+
+export function sameDate(d1: DateReq, d2: DateReq){
+  return d1.day === d2.day && d1.month === d2.month && d1.year === d2.year;
+}

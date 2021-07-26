@@ -3,6 +3,7 @@ import AddIcon from '@material-ui/icons/Add';
 import MinimizeIcon from '@material-ui/icons/Minimize';
 import Chip from '@material-ui/core/Chip';
 
+import style from './index.module.scss';
 import { Bill } from '@PO/Bill';
 import { BillType } from "@PO/enums";
 
@@ -17,10 +18,10 @@ const DayConsuItem: React.FC<Props> = (props) => {
   const Icon = bill.mode === BillType.Export ? MinimizeIcon : AddIcon;
 
   return (
-    <>
+    <div className={style.consumptionItem}>
       <Icon />{bill.amount} {bill.remark}
       <Chip label={bill.type} variant="outlined" />
-    </>
+    </div>
   );
 };
 

@@ -12,6 +12,7 @@ interface Props {
   label: string;
   value: string;
   setValue: Dispatch<SetStateAction<string>>;
+  className?: string;
   number?: boolean;
   errMsg?: string;
   outlined?: boolean;
@@ -20,7 +21,7 @@ interface Props {
 
 const MyInput: React.FC<Props> = (props) => {
 
-  const { label, value, setValue, errMsg='', number = false, outlined = false, prefix = '' } = props;
+  const { label, value, setValue, className = '', errMsg = '', number = false, outlined = false, prefix = '' } = props;
 
   const [error, setError] = useState(false);
 
@@ -37,11 +38,12 @@ const MyInput: React.FC<Props> = (props) => {
     <FormControl variant={outlined ? 'outlined' : 'standard'}>
       <InputLabel error={error}>{label}</InputLabel>
       <InputElement
+        className={className}
         label={label}
         error={error}
         value={value}
         onChange={(e) => handleChange(e.target.value)}
-        startAdornment={ prefix ? <InputAdornment position="start">{prefix}</InputAdornment> : null}
+        startAdornment={prefix ? <InputAdornment position="start">{prefix}</InputAdornment> : null}
         endAdornment={value ? <ClearIcon color={error ? 'error' : 'primary'} fontSize="small" onClick={() => handleChange('')} /> : null}
       />
       {

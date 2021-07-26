@@ -17,8 +17,8 @@ const useBillOperator = () => {
     create(bill, accountCtx);
   };
 
-  const updateBill = (bill: Bill) => {
-    update(bill, accountCtx);
+  const updateBill = (bill: Bill, sourceDate: DateReq) => {
+    update(bill, accountCtx, sourceDate);
   }
 
   const deleteBill = (unix: number, date: DateReq) => {

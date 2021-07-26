@@ -13,11 +13,13 @@ import LocalizationProvider from '@material-ui/lab/LocalizationProvider';
 import DatePicker from '@material-ui/lab/DatePicker';
 import moment from 'moment';
 
+import style from './index.module.scss';
 import Input from '@components/Input';
 import useBillOperator from "@hooks/useBillOperator";
 import { BillType, ExportBillType, ExportBillLabel, ImportBillType, ImportBillLabel } from '@PO/enums';
 import { defaultBillForm } from "@constants/bill";
 import { Bill } from "@PO/Bill";
+import { sameDate } from "@utils/calendar";
 
 interface Props {
   setFresh: Dispatch<SetStateAction<boolean>>;
@@ -44,6 +46,13 @@ const BillForm: React.FC<Props> = (props) => {
     setMode(initData.mode);
     setType(initData.type);
     setRemark(initData.remark);
+    if (initData.unix) {
+      const mo = moment();
+      mo.year(initData.date.year);
+      mo.month(initData.date.month - 1);
+      mo.date(initData.date.day);
+      setDate(mo);
+    }
   };
 
   const clearForm = useCallback(() => {
@@ -85,7 +94,7 @@ const BillForm: React.FC<Props> = (props) => {
         type,
         remark,
       };
-      updateBill(target);
+      updateBill(target, initData.date);
     }
     else {
       createBill({ amount: AMOUNT, date: dateReq, mode, type, remark });
@@ -115,17 +124,6 @@ const BillForm: React.FC<Props> = (props) => {
       noValidate
       autoComplete="off"
     >
-      <LocalizationProvider dateAdapter={AdapterDateFns}>
-        <DatePicker
-          label="日期"
-          value={date}
-          onChange={(newDate: moment.Moment | null) => {
-            if (!newDate) return;
-            setDate(newDate);
-          }}
-          renderInput={(params: any) => <TextField {...params} />}
-        />
-      </LocalizationProvider>
       <FormControl component="fieldset">
         <FormLabel component="legend">类型</FormLabel>
         <RadioGroup row value={mode} onChange={(e) => setMode(e.target.value as BillType)}>
@@ -133,9 +131,6 @@ const BillForm: React.FC<Props> = (props) => {
           <FormControlLabel value={BillType.Import} control={<Radio />} label="流入" />
         </RadioGroup>
       </FormControl>
-      <Divider variant='middle' />
-      <Input value={amount} setValue={setAmount} number outlined prefix='￥' label='金额' errMsg='请输入数字' />
-      <Divider variant='middle' />
       <FormControl component="fieldset">
         <FormLabel component="legend">类别</FormLabel>
         <RadioGroup row value={type} onChange={(e) => setType(e.target.value as ExportBillType | ImportBillType)}>
@@ -156,18 +151,45 @@ const BillForm: React.FC<Props> = (props) => {
           }
         </RadioGroup>
       </FormControl>
-      <Divider variant='middle' />
-      <Input value={remark} setValue={setRemark} outlined label='备注' />
-      <Divider variant='middle' />
-      <Button variant="outlined" onClick={handleSubmit}>{initData.unix ? '修改' : '记账'}</Button>
-      {
-        initData.unix ? (
-          <>
-            <Button variant="outlined" color="error" onClick={() => handleDelete(initData.unix)}>删除</Button>
-            <Button variant="outlined" onClick={() => setFormData(defaultBillForm)}>返回</Button>
-          </>
-        ) : null
-      }
+      <LocalizationProvider dateAdapter={AdapterDateFns}>
+        <DatePicker
+          label="日期"
+          value={date}
+          onChange={(newDate: moment.Moment | null) => {
+            if (!newDate) return;
+            setDate(newDate);
+          }}
+          renderInput={(params: any) => <TextField {...params} className={style.inputs} />}
+        />
+      </LocalizationProvider>
+      <Input
+        className={style.inputs}
+        value={amount}
+        setValue={setAmount}
+        number
+        outlined
+        prefix='￥'
+        label='金额'
+        errMsg='请输入数字'
+      />
+      <Input
+        className={style.inputs}
+        value={remark}
+        setValue={setRemark}
+        outlined
+        label='备注'
+      />
+      <div id={style.btns}>
+        <Button variant="outlined" onClick={handleSubmit}>{initData.unix ? '修改' : '记账'}</Button>
+        {
+          initData.unix ? (
+            <>
+              <Button variant="outlined" onClick={() => setFormData(defaultBillForm)}>返回</Button>
+              <Button variant="outlined" color="error" onClick={() => handleDelete(initData.unix)}>删除</Button>
+            </>
+          ) : null
+        }
+      </div>
     </Box>
 
   )

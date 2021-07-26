@@ -37,7 +37,6 @@ const DayConsuption: React.FC<Props> = (props) => {
     <div>
       <div>今日支出: {amount.ex}</div>
       <div>今日收入: {amount.im}</div>
-      <Divider variant='middle' />
       <div>
         {
           consumption.map(bill => (
