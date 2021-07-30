@@ -31,6 +31,19 @@ const useBillOperator = () => {
 
   const getMonthConsumtion = () => findMonthConsumption(getNowDate(), accountCtx);
 
+  const exportRootContainer = () => {
+    // todo 完善
+    const blob = new Blob([JSON.stringify(accountCtx)]);
+    const urlObj = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = 'data.json';
+    link.style.display = 'none';
+    link.href = urlObj;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return {
     createBill,
     updateBill,
@@ -38,6 +51,7 @@ const useBillOperator = () => {
     showAccount,
     getTodayConsumption,
     getMonthConsumtion,
+    exportRootContainer
   };
 };
 
