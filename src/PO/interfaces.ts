@@ -4,6 +4,8 @@ import { ContainerType } from './enums';
 export interface Container {
   type: ContainerType;
   dateAttr: DateAttr;
+  totalImportAmount: number;
+  totalExportAmount: number;
 }
 
 export interface SpanContainer extends Container {

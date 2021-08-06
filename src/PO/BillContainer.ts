@@ -5,11 +5,15 @@ import { getDaysOfMonth, getNowDate } from "@utils/calendar";
 import moment from "moment";
 
 export class RootContainer implements Container {
+  totalExportAmount: number;
+  totalImportAmount: number;
   type: ContainerType;
   dateAttr: DateAttr;
   containers: { [key: number]: BillSpanContainer };
 
   constructor() {
+    this.totalExportAmount = 0;
+    this.totalImportAmount = 0;
     this.type = ContainerType.Root;
     this.dateAttr = getNowDate();
     this.containers = {};
@@ -26,12 +30,15 @@ export class RootContainer implements Container {
 }
 
 export class BillSpanContainer implements SpanContainer {
-
+  totalExportAmount: number;
+  totalImportAmount: number;
   type: ContainerType;
   dateAttr: DateAttr;
   containers: SpanContainer[] | DayContainer[];
 
   constructor(type: ContainerType, dateAttr: DateAttr) {
+    this.totalExportAmount = 0;
+    this.totalImportAmount = 0;
     this.type = type;
     this.dateAttr = dateAttr;
     switch (type) {
@@ -61,11 +68,15 @@ export class BillSpanContainer implements SpanContainer {
 }
 
 export class BillDayContainer implements DayContainer {
+  totalExportAmount: number;
+  totalImportAmount: number;
   type: ContainerType;
   dateAttr: DateAttr;
   #bills: Bill[];
 
   constructor(dateAttr: DateAttr) {
+    this.totalExportAmount = 0;
+    this.totalImportAmount = 0;
     this.type = ContainerType.Day;
     this.dateAttr = dateAttr;
     this.#bills = [];

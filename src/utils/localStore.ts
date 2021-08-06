@@ -19,3 +19,7 @@ export const getRootContainer = (): RootContainer => {
 export const replaceRootContainer = (container: RootContainer) => {
   localStorage.setItem('container', JSON.stringify(container));
 }
+
+export const importRootContainer = (container: string) => {
+  localStorage.setItem('container', container);
+}

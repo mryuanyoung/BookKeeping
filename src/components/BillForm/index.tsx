@@ -94,7 +94,7 @@ const BillForm: React.FC<Props> = (props) => {
         type,
         remark,
       };
-      updateBill(target, initData.date);
+      updateBill(target, initData);
     }
     else {
       createBill({ amount: AMOUNT, date: dateReq, mode, type, remark });

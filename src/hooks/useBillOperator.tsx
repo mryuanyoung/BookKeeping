@@ -3,22 +3,22 @@ import React, { useContext } from "react";
 import { BillType, ExportBillType, ImportBillType } from '@PO/enums';
 import { AccountCtx } from '@assets/../App';
 import { ExportBill, ImportBill, Bill } from '@PO/Bill';
-import { create, update, del, findDayConsumption, findMonthConsumption, findYearConsumption } from '@PO/Operator';
+import { create, update, del, findDayConsumption, findMonthConsumption, findYearConsumption, clearAndReCalcAccount } from '@PO/Operator';
 import { BillForm } from "@interfaces/billForm";
 import { buildBill } from "@utils/bill";
 import { DateReq } from "@PO/interfaces";
 import { getNowDate } from "@utils/calendar";
 
 const useBillOperator = () => {
-  const accountCtx = useContext(AccountCtx);
+  const { accountCtx } = useContext(AccountCtx);
 
   const createBill = (param: BillForm) => {
     const bill = buildBill(param);
     create(bill, accountCtx);
   };
 
-  const updateBill = (bill: Bill, sourceDate: DateReq) => {
-    update(bill, accountCtx, sourceDate);
+  const updateBill = (target: Bill, source: Bill) => {
+    update(target, source, accountCtx);
   }
 
   const deleteBill = (unix: number, date: DateReq) => {
@@ -30,6 +30,8 @@ const useBillOperator = () => {
   const getTodayConsumption = () => findDayConsumption(getNowDate(), accountCtx);
 
   const getMonthConsumtion = () => findMonthConsumption(getNowDate(), accountCtx);
+
+  const ClearAndReCalcAccount = () => clearAndReCalcAccount(accountCtx);
 
   const exportRootContainer = () => {
     // todo 完善
@@ -51,7 +53,8 @@ const useBillOperator = () => {
     showAccount,
     getTodayConsumption,
     getMonthConsumtion,
-    exportRootContainer
+    exportRootContainer,
+    ClearAndReCalcAccount
   };
 };
 
