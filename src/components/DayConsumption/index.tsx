@@ -19,8 +19,8 @@ const DayConsuption: React.FC<Props> = (props) => {
 
   return (
     <div>
-      <div>今日支出: {container.totalExportAmount}</div>
-      <div>今日收入: {container.totalImportAmount}</div>
+      <div>今日支出: {container.totalExportAmount.toFixed(1)}</div>
+      <div>今日收入: {container.totalImportAmount.toFixed(1)}</div>
       <div>
         {
           bills.map(bill => (

@@ -144,5 +144,4 @@ export function clearAndReCalcAccount(root: RootContainer) {
     })
   })
   replaceRootContainer(root);
-  console.log('重新计算账本');
 }

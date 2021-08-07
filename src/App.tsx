@@ -7,6 +7,7 @@ import BillPage from '@pages/Bill';
 import AccountPage from '@pages/Account';
 import PeoplePage from '@pages/People';
 import RouteComponent from '@components/RouteComponent';
+import ReCalc from '@components/ReCalc';
 
 import Tabs from '@material-ui/core/Tabs';
 import Tab from '@material-ui/core/Tab';
@@ -15,6 +16,7 @@ import FavoriteIcon from '@material-ui/icons/Favorite';
 import PersonPinIcon from '@material-ui/icons/PersonPin';
 import style from './App.module.scss';
 import useBillOperator from '@hooks/useBillOperator';
+import { useEffect } from 'react';
 
 interface CtxType {
   accountCtx: RootContainer,
@@ -26,18 +28,15 @@ export const AccountCtx = createContext<CtxType>({} as CtxType);
 function App() {
 
   const [account, setAccount] = useState(getRootContainer());
-  const { ClearAndReCalcAccount } = useBillOperator();
   const [idx, setIdx] = useState(0);
-
 
   const handleChange = (event: React.SyntheticEvent, newValue: number) => {
     setIdx(newValue);
   };
 
-
   return (
     <AccountCtx.Provider value={{ accountCtx: account, setCtx: setAccount }}>
-      {/* {ClearAndReCalcAccount()} */}
+      <ReCalc />
       <div id={style.container}>
         <RouteComponent index={0} curr={idx}>
           <BillPage />

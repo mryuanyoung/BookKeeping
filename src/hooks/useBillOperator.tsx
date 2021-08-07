@@ -7,7 +7,7 @@ import { create, update, del, findDayConsumption, findMonthConsumption, findYear
 import { BillForm } from "@interfaces/billForm";
 import { buildBill } from "@utils/bill";
 import { DateReq } from "@PO/interfaces";
-import { getNowDate } from "@utils/calendar";
+import { getNowDate, getNowTime } from "@utils/calendar";
 
 const useBillOperator = () => {
   const { accountCtx } = useContext(AccountCtx);
@@ -29,7 +29,9 @@ const useBillOperator = () => {
 
   const getTodayConsumption = () => findDayConsumption(getNowDate(), accountCtx);
 
-  const getMonthConsumtion = () => findMonthConsumption(getNowDate(), accountCtx);
+  const getMonthConsumption = (date: DateReq) => findMonthConsumption(date, accountCtx);
+
+  const getYearConsumption = (date: DateReq) => findYearConsumption(date, accountCtx);
 
   const ClearAndReCalcAccount = () => clearAndReCalcAccount(accountCtx);
 
@@ -52,7 +54,8 @@ const useBillOperator = () => {
     deleteBill,
     showAccount,
     getTodayConsumption,
-    getMonthConsumtion,
+    getMonthConsumption,
+    getYearConsumption,
     exportRootContainer,
     ClearAndReCalcAccount
   };
