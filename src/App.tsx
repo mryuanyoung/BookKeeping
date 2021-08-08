@@ -11,8 +11,8 @@ import ReCalc from '@components/ReCalc';
 
 import Tabs from '@material-ui/core/Tabs';
 import Tab from '@material-ui/core/Tab';
-import PhoneIcon from '@material-ui/icons/Phone';
-import FavoriteIcon from '@material-ui/icons/Favorite';
+import CreateIcon from '@material-ui/icons/Create';
+import ReceiptIcon from '@material-ui/icons/Receipt';
 import PersonPinIcon from '@material-ui/icons/PersonPin';
 import style from './App.module.scss';
 import useBillOperator from '@hooks/useBillOperator';
@@ -49,8 +49,8 @@ function App() {
         </RouteComponent>
       </div>
       <Tabs id={style.tabs} value={idx} variant="fullWidth" onChange={handleChange} visibleScrollbar>
-        <Tab icon={<PhoneIcon />} label="记账" />
-        <Tab icon={<FavoriteIcon />} label="账单" />
+        <Tab icon={<CreateIcon />} label="记账" />
+        <Tab icon={<ReceiptIcon />} label="账单" />
         <Tab icon={<PersonPinIcon />} label="个人" />
       </Tabs>
     </AccountCtx.Provider>

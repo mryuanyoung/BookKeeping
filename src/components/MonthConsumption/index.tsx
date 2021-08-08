@@ -49,7 +49,7 @@ const MonthConsumption: React.FC<Props> = (props) => {
           return (
             <Accordion key={dayCont.dateAttr.year + dayCont.dateAttr.month! + dayCont.dateAttr.day!}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <div>{dayCont.dateAttr.day}号 支出：{dayCont.totalExportAmount.toFixed(1)} 收入：{monthCont.totalImportAmount.toFixed(1)}</div>
+                <div>{dayCont.dateAttr.day}号 支出：{dayCont.totalExportAmount.toFixed(1)} 收入：{dayCont.totalImportAmount.toFixed(1)}</div>
               </AccordionSummary>
               <AccordionDetails>
                 {

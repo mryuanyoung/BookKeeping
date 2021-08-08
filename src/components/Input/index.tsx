@@ -11,7 +11,8 @@ import ClearIcon from '@material-ui/icons/Clear';
 interface Props {
   label: string;
   value: string;
-  setValue: Dispatch<SetStateAction<string>>;
+  setValue: Function;
+  style?: any;
   className?: string;
   number?: boolean;
   errMsg?: string;
@@ -21,7 +22,7 @@ interface Props {
 
 const MyInput: React.FC<Props> = (props) => {
 
-  const { label, value, setValue, className = '', errMsg = '', number = false, outlined = false, prefix = '' } = props;
+  const { label, value, setValue, style, className = '', errMsg = '', number = false, outlined = false, prefix = '' } = props;
 
   const [error, setError] = useState(false);
 
@@ -35,10 +36,9 @@ const MyInput: React.FC<Props> = (props) => {
   }
 
   return (
-    <FormControl variant={outlined ? 'outlined' : 'standard'}>
+    <FormControl style={style} className={className} variant={outlined ? 'outlined' : 'standard'}>
       <InputLabel error={error}>{label}</InputLabel>
       <InputElement
-        className={className}
         label={label}
         error={error}
         value={value}

@@ -1,0 +1,27 @@
+.inputs{
+  width: 80vw;
+}
+
+#salary{
+  height: 85vh;
+  text-align: center;
+  margin-top: 1rem;
+}
+
+#btns{
+  display: flex;
+  justify-content: center;
+  >button{
+    margin: 0.6rem;
+  }
+}
+
+.chip{
+  margin-bottom: 1rem;
+  margin-right: 0.2rem;
+}
+
+.leftEle{
+  text-align: start;
+  margin-left: 8vw;
+}

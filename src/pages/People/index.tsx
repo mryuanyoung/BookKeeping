@@ -5,6 +5,7 @@ import style from './index.module.scss';
 import useBillOperator from "@hooks/useBillOperator";
 import { AccountCtx } from '@assets/../App';
 import { importRootContainer } from '@utils/localStore';
+import SalaryCalc from "@components/SalaryCalc";
 
 const People = () => {
 
@@ -34,9 +35,7 @@ const People = () => {
       </div>
       <Button variant="outlined" onClick={exportRootContainer}>导出数据</Button>
       <input type='file' ref={ref} onChange={handleChange} />
-      <div>
-        薪资计算
-      </div>
+      <SalaryCalc />
       <div>
         花销预算
       </div>
