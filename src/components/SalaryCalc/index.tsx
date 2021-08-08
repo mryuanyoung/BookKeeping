@@ -105,6 +105,7 @@ const SalaryCalc = () => {
   }
 
   const preserveCalcRes = () => {
+    if(!name) return;
     preserveSalary(name, inputs);
   };
 
