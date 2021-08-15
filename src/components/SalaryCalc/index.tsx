@@ -73,7 +73,8 @@ const SalaryCalc = () => {
       }
     }
     const TotalTax = TaxBase * TaxTable[idx][0] - TaxTable[idx][1];
-    const TotalSalary = TotalImport - (PersonFiveInsure + Fund) * 12 - TotalTax;
+    const TotalSalary = (TotalImport - (PersonFiveInsure + Fund) * 12 - TotalTax);
+    const TotalFund = (Fund * 12 * 2);
     const res = `
     月薪：基础工资${INPUTS.base}+${INPUTS.subsidy.map((item: { remark: string, amount: string }) => item.remark + item.amount).join('+')}=${LstYearAvgSalary}
     年终：现金${Bonus}+${INPUTS.extraBonus.map((item: { remark: string, amount: string }) => item.remark + item.amount).join('+')}=${Bonus + ExtraBonus}
@@ -85,7 +86,8 @@ const SalaryCalc = () => {
     个税缴纳：${TotalTax}
     -----------------------------
     全年税后现金收入：${TotalSalary.toFixed(1)}
-    全年公积金缴存：${(Fund * 12 * 2).toFixed(1)}
+    全年公积金缴存：${TotalFund.toFixed(1)}
+    全年总收入：${(TotalSalary+TotalFund).toFixed(1)}
     `;
     setCalcRes(res);
   }
