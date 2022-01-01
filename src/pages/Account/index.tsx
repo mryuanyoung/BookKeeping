@@ -9,6 +9,7 @@ import YearConsumption from "@components/YearConsumption";
 import MonthConsumption from "@components/MonthConsumption";
 import { defaultBillForm } from "@constants/bill";
 import RouteComponent from "@components/RouteComponent";
+import TotalConsumption from "@components/TotalConsumption";
 
 const Account = () => {
 
@@ -32,12 +33,16 @@ const Account = () => {
       <Tabs value={value} onChange={handleChange}>
         <Tab label="月度账单" />
         <Tab label="年度账单" />
+        <Tab label="总账单" />
       </Tabs>
       <RouteComponent index={0} curr={value}>
         <MonthConsumption setFormData={setFormData} setOpen={setOpen} />
       </RouteComponent>
       <RouteComponent index={1} curr={value}>
         <YearConsumption setFormData={setFormData} setOpen={setOpen} />
+      </RouteComponent>
+      <RouteComponent index={2} curr={value}>
+        <TotalConsumption setFormData={setFormData} setOpen={setOpen} />
       </RouteComponent>
     </div>
   );

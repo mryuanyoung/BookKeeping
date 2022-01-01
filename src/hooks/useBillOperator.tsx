@@ -35,6 +35,8 @@ const useBillOperator = () => {
 
   const ClearAndReCalcAccount = () => clearAndReCalcAccount(accountCtx);
 
+  const getRootContainer = () => accountCtx.containers;
+
   const exportRootContainer = () => {
     // todo 完善
     const blob = new Blob([JSON.stringify(accountCtx)]);
@@ -49,6 +51,7 @@ const useBillOperator = () => {
   };
 
   return {
+    getRootContainer,
     createBill,
     updateBill,
     deleteBill,
