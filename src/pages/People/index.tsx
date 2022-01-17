@@ -6,6 +6,7 @@ import useBillOperator from "@hooks/useBillOperator";
 import { AccountCtx } from '@assets/../App';
 import { importRootContainer } from '@utils/localStore';
 import SalaryCalc from "@components/SalaryCalc";
+import WebDAV from "@components/WebDAV";
 
 const People = () => {
 
@@ -36,6 +37,7 @@ const People = () => {
       <Button variant="outlined" onClick={exportRootContainer}>导出数据</Button>
       <input type='file' ref={ref} onChange={handleChange} />
       <SalaryCalc />
+      <WebDAV />
       <div>
         花销预算
       </div>
