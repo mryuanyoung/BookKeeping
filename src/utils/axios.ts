@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 const Axios = axios.create({
-  // baseURL: 'http://101.33.125.161:8085',
-  baseURL: 'http://localhost:3001'
+  baseURL: 'http://101.33.125.161:8085',
+  // baseURL: 'http://localhost:3001'
 });
 
 Axios.interceptors.request.use(
