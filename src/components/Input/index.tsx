@@ -18,11 +18,12 @@ interface Props {
   errMsg?: string;
   outlined?: boolean;
   prefix?: string;
+  type?: string;
 }
 
 const MyInput: React.FC<Props> = (props) => {
 
-  const { label, value, setValue, style, className = '', errMsg = '', number = false, outlined = false, prefix = '' } = props;
+  const { label, value, setValue, style, className = '', errMsg = '', number = false, outlined = false, prefix = '', type = 'text' } = props;
 
   const [error, setError] = useState(false);
 
@@ -39,6 +40,7 @@ const MyInput: React.FC<Props> = (props) => {
     <FormControl style={style} className={className} variant={outlined ? 'outlined' : 'standard'}>
       <InputLabel error={error}>{label}</InputLabel>
       <InputElement
+        type={type}
         label={label}
         error={error}
         value={value}

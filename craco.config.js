@@ -20,6 +20,7 @@ module.exports = {
       '@PO': path.resolve(__dirname, 'src/PO/'),
       '@utils': path.resolve(__dirname, 'src/utils/'),
       '@interfaces': path.resolve(__dirname, 'src/interfaces/'),
+      '@api': path.resolve(__dirname, 'src/api/')
     },
   },
 };

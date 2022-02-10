@@ -21,8 +21,12 @@ export interface Response<T>{
   res: T,
 }
 
+function url(path: string){
+  return `http://101.33.125.161:8085${path}`
+}
+
 export function backupData(json: string, username: string, password: string): Promise<Response<boolean>>{
-  return Axios.post('/createFile', {
+  return Axios.post(url('/createFile'), {
     json,
     username,
     password
