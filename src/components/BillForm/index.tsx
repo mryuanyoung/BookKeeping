@@ -19,6 +19,7 @@ import AdapterDateFns from '@material-ui/lab/AdapterMoment';
 import LocalizationProvider from '@material-ui/lab/LocalizationProvider';
 import DatePicker from '@material-ui/lab/DatePicker';
 import moment from 'moment';
+import { db } from '../../database/db';
 
 import style from './index.module.scss';
 import Input from '@components/Input';
@@ -31,7 +32,7 @@ import {
   ImportBillLabel
 } from '@PO/enums';
 import { defaultBillForm } from '@constants/bill';
-import { Bill } from '@PO/Bill';
+import { Bill, ExportBill, ImportBill } from '@PO/Bill';
 import { sameDate } from '@utils/calendar';
 
 interface Props {
@@ -106,6 +107,20 @@ const BillForm: React.FC<Props> = props => {
       };
       updateBill(target, initData);
     } else {
+      if (mode === BillType.Export) {
+        const bill = new ExportBill(
+          AMOUNT,
+          remark,
+          type as ExportBillType,
+          dateReq
+        );
+        console.log(bill);
+        db.exportBill.add(bill);
+      } else {
+        db.importBill.add(
+          new ImportBill(AMOUNT, remark, type as ImportBillType, dateReq)
+        );
+      }
       createBill({ amount: AMOUNT, date: dateReq, mode, type, remark });
     }
     setFresh(b => !b);

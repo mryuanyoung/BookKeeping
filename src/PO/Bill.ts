@@ -3,6 +3,8 @@ import { BillType, ImportBillType, ExportBillType } from './enums';
 import { DateReq, TimeReq } from './interfaces';
 
 export interface Bill {
+  id?: number;
+  dateStr: string;
   date: DateReq;
   time: TimeReq;
   mode: BillType;
@@ -12,12 +14,17 @@ export interface Bill {
   type: ImportBillType | ExportBillType;
 }
 
-interface ImportBillT extends Bill {}
+interface ImportBillT extends Bill {
+  type: ImportBillType;
+}
 
-interface ExportBillT extends Bill {}
+interface ExportBillT extends Bill {
+  type: ExportBillType;
+}
 
 export class ImportBill implements ImportBillT {
   date: DateReq;
+  dateStr: string;
   time: TimeReq;
   mode: BillType;
   amount: number;
@@ -34,6 +41,7 @@ export class ImportBill implements ImportBillT {
     this.time = getNowTime();
     this.unix = getUnix();
     this.date = date;
+    this.dateStr = `${date.year}-${date.month}-${date.day}`;
     this.mode = BillType.Import;
     this.amount = amount;
     this.remark = remark;
@@ -43,6 +51,7 @@ export class ImportBill implements ImportBillT {
 
 export class ExportBill implements ExportBillT {
   date: DateReq;
+  dateStr: string;
   time: TimeReq;
   mode: BillType;
   amount: number;
@@ -59,6 +68,7 @@ export class ExportBill implements ExportBillT {
     this.time = getNowTime();
     this.unix = getUnix();
     this.date = date;
+    this.dateStr = `${date.year}-${date.month}-${date.day}`;
     this.mode = BillType.Export;
     this.amount = amount;
     this.remark = remark;
