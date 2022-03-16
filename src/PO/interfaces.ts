@@ -16,19 +16,19 @@ export interface DayContainer extends Container {
 }
 
 export interface DateAttr {
-  year: number,
-  month?: number,
-  day?: number,
+  year: number;
+  month?: number;
+  day?: number;
 }
 
 export interface DateReq {
-  year: number,
-  month: number,
-  day: number,
+  year: number;
+  month: number;
+  day: number;
 }
 
 export interface TimeReq {
-  hour: number,
-  minute: number,
-  second: number,
+  hour: number;
+  minute: number;
+  second: number;
 }

@@ -6,26 +6,26 @@ const Axios = axios.create({
 });
 
 Axios.interceptors.request.use(
-  (config) => {
+  config => {
     //请求之前
     return config;
   },
-  (error) => {
+  error => {
     //错误处理
     return Promise.reject(error);
   }
-)
+);
 
 Axios.interceptors.response.use(
-  (response) => {
+  response => {
     //处理响应数据
     const res = response.data;
     return res;
   },
-  (error) => {
+  error => {
     //错误处理
     return Promise.reject(error);
   }
-)
+);
 
 export default Axios;

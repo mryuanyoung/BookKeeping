@@ -5,6 +5,6 @@ export interface BillForm {
   amount: number;
   mode: BillType;
   type: ExportBillType | ImportBillType;
-  remark: string,
-  date: DateReq,
+  remark: string;
+  date: DateReq;
 }

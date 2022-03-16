@@ -1,4 +1,4 @@
-import { BillForm } from "@interfaces/billForm";
+import { BillForm } from '@interfaces/billForm';
 import { Bill, ExportBill, ImportBill } from '@PO/Bill';
 import { ExportBillType, BillType, ImportBillType } from '@PO/enums';
 
@@ -7,8 +7,7 @@ export function buildBill(param: BillForm): Bill {
   let bill;
   if (mode === BillType.Export) {
     bill = new ExportBill(amount, remark, type as ExportBillType, date);
-  }
-  else {
+  } else {
     bill = new ImportBill(amount, remark, type as ImportBillType, date);
   }
   return bill;

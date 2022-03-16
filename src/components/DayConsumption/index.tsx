@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState, Dispatch, SetStateAction } from "react";
+import React, { useEffect, useState, Dispatch, SetStateAction } from 'react';
 
 import useBillOperator from '@hooks/useBillOperator';
 import DayConsuItem from '@components/DayConsuItem';
@@ -10,8 +9,7 @@ interface Props {
   setFormData: Dispatch<SetStateAction<Bill>>;
 }
 
-const DayConsuption: React.FC<Props> = (props) => {
-
+const DayConsuption: React.FC<Props> = props => {
   const { fresh, setFormData } = props;
 
   const { getTodayConsumption } = useBillOperator();
@@ -22,13 +20,11 @@ const DayConsuption: React.FC<Props> = (props) => {
       <div>今日支出: {container.totalExportAmount.toFixed(1)}</div>
       <div>今日收入: {container.totalImportAmount.toFixed(1)}</div>
       <div>
-        {
-          bills.map(bill => (
-            <div onClick={e => setFormData(bill)} key={bill.unix}>
-              <DayConsuItem bill={bill} />
-            </div>
-          ))
-        }
+        {bills.map(bill => (
+          <div onClick={e => setFormData(bill)} key={bill.unix}>
+            <DayConsuItem bill={bill} />
+          </div>
+        ))}
       </div>
     </div>
   );

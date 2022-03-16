@@ -1,7 +1,7 @@
 import Input from '@components/Input';
 import useBillOperator from '@hooks/useBillOperator';
-import { Button, Modal, Box, Snackbar } from '@material-ui/core'
-import {LoadingButton} from '@material-ui/lab'
+import { Button, Modal, Box, Snackbar } from '@material-ui/core';
+import { LoadingButton } from '@material-ui/lab';
 import { useState } from 'react';
 import { backupData } from '../../api/webdav';
 
@@ -14,7 +14,7 @@ const style = {
   bgcolor: 'background.paper',
   border: '2px solid #000',
   boxShadow: 24,
-  p: 4,
+  p: 4
 };
 
 const WebDAV = () => {
@@ -23,83 +23,99 @@ const WebDAV = () => {
   const [password, setPassword] = useState('');
   const [toast, setToast] = useState('');
   const [loading, setLoading] = useState(false);
-  const {showAccount} = useBillOperator();
+  const { showAccount } = useBillOperator();
 
   const handleSubmit = () => {
     if (!username || !password) {
       return;
     }
 
-    localStorage.setItem('account', JSON.stringify({
-      username,
-      password
-    }))
+    localStorage.setItem(
+      'account',
+      JSON.stringify({
+        username,
+        password
+      })
+    );
 
     setBaseInfoVisi(false);
 
     setToast('保存成功!');
-  }
+  };
 
   const webDAVBackup = async () => {
     const account = JSON.parse(localStorage.getItem('account') || '{}');
-    if(!account.password || !account.username){
+    if (!account.password || !account.username) {
       setToast('请配置基本信息!');
       return;
     }
 
     setLoading(true);
 
-    try{
+    try {
       const json = JSON.stringify(showAccount());
       const res = await backupData(json, account.username, account.password);
-      if(res.success){
+      if (res.success) {
         setToast('备份成功!');
-      }
-      else{
+      } else {
         setToast('备份失败!');
       }
-    }
-    catch(err){
+    } catch (err) {
       console.error(err);
-    }
-    finally{
+    } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <div>
       <Modal open={baseInfoVisi} onClose={() => setBaseInfoVisi(false)}>
-        <Box component="form"
+        <Box
+          component="form"
           sx={{
             '& > :not(style)': { m: 1 },
             background: 'white'
           }}
           noValidate
-          autoComplete="off">
-
+          autoComplete="off"
+        >
           <Input
             style={{ width: '80vw' }}
             value={username}
             setValue={setUsername}
             outlined
-            label='用户名'
+            label="用户名"
           />
           <Input
             style={{ width: '80vw' }}
             value={password}
             setValue={setPassword}
             outlined
-            label='密码'
+            label="密码"
           />
-          <Button variant="outlined" onClick={handleSubmit}>保存</Button>
+          <Button variant="outlined" onClick={handleSubmit}>
+            保存
+          </Button>
         </Box>
       </Modal>
-      <Button variant="outlined" onClick={() => setBaseInfoVisi(true)}>基本信息</Button>
-      <LoadingButton variant="outlined" onClick={webDAVBackup} loading={loading}>云盘备份</LoadingButton>
-      <Snackbar open={toast !== ''} onClose={() => setToast('')}  autoHideDuration={2000} message={toast}/>
+      <Button variant="outlined" onClick={() => setBaseInfoVisi(true)}>
+        基本信息
+      </Button>
+      <LoadingButton
+        variant="outlined"
+        onClick={webDAVBackup}
+        loading={loading}
+      >
+        云盘备份
+      </LoadingButton>
+      <Snackbar
+        open={toast !== ''}
+        onClose={() => setToast('')}
+        autoHideDuration={2000}
+        message={toast}
+      />
     </div>
-  )
-}
+  );
+};
 
 export default WebDAV;

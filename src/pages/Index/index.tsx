@@ -16,7 +16,6 @@ import useAuth from '@hooks/useAuth';
 import style from './index.module.scss';
 
 const Index = () => {
-
   useAuth();
 
   const [idx, setIdx] = useState(0);
@@ -37,13 +36,19 @@ const Index = () => {
           <PeoplePage />
         </RouteComponent>
       </div>
-      <Tabs id={style.tabs} value={idx} variant="fullWidth" onChange={handleChange} visibleScrollbar>
+      <Tabs
+        id={style.tabs}
+        value={idx}
+        variant="fullWidth"
+        onChange={handleChange}
+        visibleScrollbar
+      >
         <Tab icon={<CreateIcon />} label="记账" />
         <Tab icon={<ReceiptIcon />} label="账单" />
         <Tab icon={<PersonPinIcon />} label="个人" />
       </Tabs>
     </>
   );
-}
+};
 
 export default Index;

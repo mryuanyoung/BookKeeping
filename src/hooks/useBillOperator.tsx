@@ -1,13 +1,21 @@
-import React, { useContext } from "react";
+import React, { useContext } from 'react';
 
 import { BillType, ExportBillType, ImportBillType } from '@PO/enums';
 import { AccountCtx } from '@assets/../App';
 import { ExportBill, ImportBill, Bill } from '@PO/Bill';
-import { create, update, del, findDayConsumption, findMonthConsumption, findYearConsumption, clearAndReCalcAccount } from '@PO/Operator';
-import { BillForm } from "@interfaces/billForm";
-import { buildBill } from "@utils/bill";
-import { DateReq } from "@PO/interfaces";
-import { getNowDate, getNowTime } from "@utils/calendar";
+import {
+  create,
+  update,
+  del,
+  findDayConsumption,
+  findMonthConsumption,
+  findYearConsumption,
+  clearAndReCalcAccount
+} from '@PO/Operator';
+import { BillForm } from '@interfaces/billForm';
+import { buildBill } from '@utils/bill';
+import { DateReq } from '@PO/interfaces';
+import { getNowDate, getNowTime } from '@utils/calendar';
 
 const useBillOperator = () => {
   const { accountCtx } = useContext(AccountCtx);
@@ -19,19 +27,22 @@ const useBillOperator = () => {
 
   const updateBill = (target: Bill, source: Bill) => {
     update(target, source, accountCtx);
-  }
+  };
 
   const deleteBill = (unix: number, date: DateReq) => {
     del(unix, date, accountCtx);
-  }
+  };
 
   const showAccount = () => accountCtx;
 
-  const getTodayConsumption = () => findDayConsumption(getNowDate(), accountCtx);
+  const getTodayConsumption = () =>
+    findDayConsumption(getNowDate(), accountCtx);
 
-  const getMonthConsumption = (date: DateReq) => findMonthConsumption(date, accountCtx);
+  const getMonthConsumption = (date: DateReq) =>
+    findMonthConsumption(date, accountCtx);
 
-  const getYearConsumption = (date: DateReq) => findYearConsumption(date, accountCtx);
+  const getYearConsumption = (date: DateReq) =>
+    findYearConsumption(date, accountCtx);
 
   const ClearAndReCalcAccount = () => clearAndReCalcAccount(accountCtx);
 
