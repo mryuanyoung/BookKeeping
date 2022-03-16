@@ -3,10 +3,10 @@
     "ecmaVersion": 12,
     "sourceType": "module"
   },
-  "parser": "@typescript-eslint/parser",
-  "plugins": [
-    "@typescript-eslint"
-  ]
+  "parser": "@typescript-eslint/parser"
+  // "plugins": [
+  //   "@typescript-eslint"
+  // ]
   // "extends": [
   //   "airbnb",
   //   "airbnb/hooks"
