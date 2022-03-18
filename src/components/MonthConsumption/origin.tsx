@@ -13,8 +13,6 @@ import BillForm from '@components/BillForm';
 import { Bill } from '@PO/Bill';
 import { defaultBillForm } from '@constants/bill';
 import { getNowDate } from '@utils/calendar';
-import useFindBills, { MonthContainerVO } from '@hooks/useFindBills';
-import { BillSpan } from '@PO/enums';
 
 interface Props {
   setFormData: React.Dispatch<React.SetStateAction<Bill>>;
@@ -22,15 +20,10 @@ interface Props {
   date?: DateReq;
 }
 
-const MonthConsumption: React.FC<Props> = React.memo(props => {
+const MonthConsumption: React.FC<Props> = props => {
   const { setFormData, setOpen, date } = props;
-  // const { getMonthConsumption } = useBillOperator();
-  // const monthCont = getMonthConsumption(date || getNowDate());
-
-  const monthContainer = useFindBills({
-    date: date || getNowDate(),
-    span: BillSpan.Month
-  }) as MonthContainerVO;
+  const { getMonthConsumption } = useBillOperator();
+  const monthCont = getMonthConsumption(date || getNowDate());
 
   const handleOpen = (bill: Bill) => {
     setFormData(bill);
@@ -39,16 +32,11 @@ const MonthConsumption: React.FC<Props> = React.memo(props => {
 
   return (
     <div>
-      {/* <div>支出：{monthCont.totalExportAmount.toFixed(1)}</div>
+      <div>支出：{monthCont.totalExportAmount.toFixed(1)}</div>
       <div>收入：{monthCont.totalImportAmount.toFixed(1)}</div>
       {monthCont.containers
         .map((dayCont, idx) => {
-          const bills = (dayCont as DayContainer).bills || []; */}
-      <div>支出：{monthContainer.totalExportAmount.toFixed(1)}</div>
-      <div>收入：{monthContainer.totalImportAmount.toFixed(1)}</div>
-      {monthContainer.dayContainers
-        .map((dayCont, idx) => {
-          const bills = dayCont.bills;
+          const bills = (dayCont as DayContainer).bills || [];
           const day = dayCont.dateAttr.day!;
           const today = moment().date();
           if (bills.length === 0 || (!date && day > today)) return;
@@ -80,6 +68,6 @@ const MonthConsumption: React.FC<Props> = React.memo(props => {
         .reverse()}
     </div>
   );
-});
+};
 
 export default MonthConsumption;

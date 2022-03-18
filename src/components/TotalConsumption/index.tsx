@@ -9,6 +9,12 @@ import Accordion from '@material-ui/core/Accordion';
 import AccordionSummary from '@material-ui/core/AccordionSummary';
 import AccordionDetails from '@material-ui/core/AccordionDetails';
 import ExpandMoreIcon from '@material-ui/icons/ExpandMore';
+import YearConsumption from '@components/YearConsumption';
+
+const now = getNowDate();
+const years = Array(now.year - 2021 + 1)
+  .fill(0)
+  .map((_, idx) => now.year - idx);
 
 interface Props {
   setFormData: React.Dispatch<React.SetStateAction<Bill>>;
@@ -16,16 +22,38 @@ interface Props {
   date?: DateReq;
 }
 
-const TotalConsumption: React.FC<Props> = props => {
+const TotalConsumption: React.FC<Props> = React.memo(props => {
   const { setFormData, setOpen, date } = props;
-  const { getYearConsumption, getRootContainer } = useBillOperator();
+  // const { getYearConsumption, getRootContainer } = useBillOperator();
 
-  const root = getRootContainer();
-  const container = getYearConsumption(date || getNowDate());
+  // const root = getRootContainer();
+  // const container = getYearConsumption(date || getNowDate());
 
   return (
     <div>
-      {Object.keys(root).map(key => {
+      {years.map(year => (
+        <div>
+          {year}年:
+          <YearConsumption
+            key={year}
+            setFormData={setFormData}
+            setOpen={setOpen}
+            date={{ year, month: 1, day: 1 }}
+          />
+        </div>
+      ))}
+      {/* <YearConsumption
+        setFormData={setFormData}
+        setOpen={setOpen}
+        date={getNowDate()}
+      />
+      hhh
+      <YearConsumption
+        setFormData={setFormData}
+        setOpen={setOpen}
+        date={{ ...getNowDate(), year: 2021 }}
+      /> */}
+      {/* {Object.keys(root).map(key => {
         const container = root[key as any as number];
 
         return (
@@ -64,9 +92,9 @@ const TotalConsumption: React.FC<Props> = props => {
             </div>
           </Accordion>
         );
-      })}
+      })} */}
     </div>
   );
-};
+});
 
 export default TotalConsumption;

@@ -19,7 +19,6 @@ import AdapterDateFns from '@material-ui/lab/AdapterMoment';
 import LocalizationProvider from '@material-ui/lab/LocalizationProvider';
 import DatePicker from '@material-ui/lab/DatePicker';
 import moment from 'moment';
-import { db } from '../../database/db';
 
 import style from './index.module.scss';
 import Input from '@components/Input';
@@ -34,6 +33,10 @@ import {
 import { defaultBillForm } from '@constants/bill';
 import { Bill, ExportBill, ImportBill } from '@PO/Bill';
 import { sameDate } from '@utils/calendar';
+import { buildBill } from '@utils/bill';
+import { create } from '@PO/dbOperator';
+import { useDataOrigin } from '@hooks/useDataOrigin';
+import { include, LOCALSTORAGE } from '@constants/dataOrigin';
 
 interface Props {
   setFresh: Dispatch<SetStateAction<boolean>>;
@@ -51,6 +54,7 @@ const BillForm: React.FC<Props> = props => {
   const [type, setType] = useState(initData.type);
   const [remark, setRemark] = useState(initData.remark);
   const [date, setDate] = useState<moment.Moment | null>(moment());
+  const { origin } = useDataOrigin();
 
   const initForm = () => {
     const Amount = initData.unix ? initData.amount + '' : '';
@@ -107,21 +111,13 @@ const BillForm: React.FC<Props> = props => {
       };
       updateBill(target, initData);
     } else {
-      if (mode === BillType.Export) {
-        const bill = new ExportBill(
-          AMOUNT,
-          remark,
-          type as ExportBillType,
-          dateReq
-        );
-        console.log(bill);
-        db.exportBill.add(bill);
-      } else {
-        db.importBill.add(
-          new ImportBill(AMOUNT, remark, type as ImportBillType, dateReq)
-        );
+      create(
+        buildBill({ amount: AMOUNT, date: dateReq, mode, type, remark }),
+        origin
+      );
+      if ((origin & LOCALSTORAGE) !== 0b0) {
+        createBill({ amount: AMOUNT, date: dateReq, mode, type, remark });
       }
-      createBill({ amount: AMOUNT, date: dateReq, mode, type, remark });
     }
     setFresh(b => !b);
     clearForm();

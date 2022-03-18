@@ -8,6 +8,7 @@ import { importRootContainer } from '@utils/localStore';
 import SalaryCalc from '@components/SalaryCalc';
 import WebDAV from '@components/WebDAV';
 import { useNavigate } from 'react-router-dom';
+import { importJSONToIndexedDB } from '@database/db';
 
 const People = () => {
   const { exportRootContainer } = useBillOperator();
@@ -21,8 +22,10 @@ const People = () => {
     const arrayBuf = reader.result!;
     const blob = new Blob([arrayBuf]);
     const text = await blob.text();
-    importRootContainer(text);
-    setCtx(JSON.parse(text));
+    // 导入外部数据到数据库
+    // importRootContainer(text);
+    // setCtx(JSON.parse(text));
+    importJSONToIndexedDB(text);
   });
 
   const handleChange = (e: any) => {

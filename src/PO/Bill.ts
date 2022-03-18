@@ -11,7 +11,7 @@ export interface Bill {
   amount: number;
   remark: string;
   unix: number;
-  type: ImportBillType | ExportBillType;
+  type: string;
 }
 
 interface ImportBillT extends Bill {
@@ -23,6 +23,7 @@ interface ExportBillT extends Bill {
 }
 
 export class ImportBill implements ImportBillT {
+  id?: number | undefined;
   date: DateReq;
   dateStr: string;
   time: TimeReq;
@@ -50,6 +51,7 @@ export class ImportBill implements ImportBillT {
 }
 
 export class ExportBill implements ExportBillT {
+  id?: number | undefined;
   date: DateReq;
   dateStr: string;
   time: TimeReq;

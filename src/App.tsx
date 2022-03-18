@@ -8,6 +8,7 @@ import ReCalc from '@components/ReCalc';
 import Login from '@pages/Login';
 import Register from '@pages/Register';
 import Index from '@pages/Index';
+import DataOrigin from '@hooks/useDataOrigin';
 
 interface CtxType {
   accountCtx: RootContainer;
@@ -20,16 +21,18 @@ function App() {
   const [account, setAccount] = useState(getRootContainer());
 
   return (
-    <AccountCtx.Provider value={{ accountCtx: account, setCtx: setAccount }}>
-      <ReCalc />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-        </Routes>
-      </BrowserRouter>
-    </AccountCtx.Provider>
+    <DataOrigin>
+      <AccountCtx.Provider value={{ accountCtx: account, setCtx: setAccount }}>
+        {/* <ReCalc /> */}
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+          </Routes>
+        </BrowserRouter>
+      </AccountCtx.Provider>
+    </DataOrigin>
   );
 }
 

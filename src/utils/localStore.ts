@@ -28,6 +28,7 @@ export const getRootContainer = (): RootContainer => {
 };
 
 export const replaceRootContainer = (container: RootContainer) => {
+  // json全量更新
   localStorage.setItem('container', JSON.stringify(container));
 };
 

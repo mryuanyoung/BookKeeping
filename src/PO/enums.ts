@@ -11,6 +11,13 @@ export enum BillType {
   Import = 'Import'
 }
 
+export enum BillSpan {
+  Day = 'Day',
+  Month = 'Month',
+  Year = 'Year',
+  Whole = 'Whole'
+}
+
 export enum ExportBillType {
   Meal = 'Meal',
   Entertainment = 'Entertainment',
