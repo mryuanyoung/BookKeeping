@@ -20,17 +20,23 @@ interface Props {
   setFormData: React.Dispatch<React.SetStateAction<Bill>>;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
   date?: DateReq;
+  fresh?: boolean;
+  data?: MonthContainerVO;
 }
 
 const MonthConsumption: React.FC<Props> = React.memo(props => {
-  const { setFormData, setOpen, date } = props;
+  console.log('month consumption render');
+  const { setFormData, setOpen, date, fresh = false, data } = props;
   // const { getMonthConsumption } = useBillOperator();
   // const monthCont = getMonthConsumption(date || getNowDate());
 
-  const monthContainer = useFindBills({
-    date: date || getNowDate(),
-    span: BillSpan.Month
-  }) as MonthContainerVO;
+  const monthContainer =
+    data ||
+    (useFindBills({
+      date: date || getNowDate(),
+      span: BillSpan.Month,
+      fresh
+    }) as MonthContainerVO);
 
   const handleOpen = (bill: Bill) => {
     setFormData(bill);

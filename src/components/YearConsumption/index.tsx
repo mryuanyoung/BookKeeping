@@ -16,18 +16,23 @@ interface Props {
   setFormData: React.Dispatch<React.SetStateAction<Bill>>;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
   date?: DateReq;
+  fresh?: boolean;
+  data?: YearContainerVO;
 }
 
 const YearConsumption: React.FC<Props> = React.memo(props => {
-  const { setFormData, setOpen, date } = props;
+  const { setFormData, setOpen, date, fresh = false, data } = props;
   // const { getYearConsumption } = useBillOperator();
 
   // const container = getYearConsumption(date || getNowDate());
 
-  const yearContainer = useFindBills({
-    date: date || getNowDate(),
-    span: BillSpan.Year
-  }) as YearContainerVO;
+  const yearContainer =
+    data ||
+    (useFindBills({
+      date: date || getNowDate(),
+      span: BillSpan.Year,
+      fresh
+    }) as YearContainerVO);
 
   return (
     <div>
@@ -54,6 +59,7 @@ const YearConsumption: React.FC<Props> = React.memo(props => {
               </AccordionSummary>
               <AccordionDetails>
                 <MonthConsumption
+                  data={monthCont}
                   setFormData={setFormData}
                   setOpen={setOpen}
                   date={{

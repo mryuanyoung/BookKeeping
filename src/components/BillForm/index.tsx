@@ -34,7 +34,7 @@ import { defaultBillForm } from '@constants/bill';
 import { Bill, ExportBill, ImportBill } from '@PO/Bill';
 import { sameDate } from '@utils/calendar';
 import { buildBill } from '@utils/bill';
-import { create } from '@PO/dbOperator';
+import { create, delBill, update, Variant } from '@PO/dbOperator';
 import { useDataOrigin } from '@hooks/useDataOrigin';
 import { include, LOCALSTORAGE } from '@constants/dataOrigin';
 
@@ -90,7 +90,7 @@ const BillForm: React.FC<Props> = props => {
     }
   }, [mode]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // 粗糙的表单验证;
     const AMOUNT = parseFloat(amount) || 0;
     if (AMOUNT === 0) return;
@@ -100,7 +100,8 @@ const BillForm: React.FC<Props> = props => {
       day: date!.date()
     };
 
-    if (initData.unix) {
+    if (initData.id) {
+      // 修改
       const target = {
         ...initData,
         amount: AMOUNT,
@@ -109,9 +110,13 @@ const BillForm: React.FC<Props> = props => {
         type,
         remark
       };
-      updateBill(target, initData);
+      await update(target, initData, origin);
+      if ((origin & LOCALSTORAGE) !== 0b0) {
+        updateBill(target, initData);
+      }
     } else {
-      create(
+      // 新增
+      await create(
         buildBill({ amount: AMOUNT, date: dateReq, mode, type, remark }),
         origin
       );
@@ -123,14 +128,18 @@ const BillForm: React.FC<Props> = props => {
     clearForm();
   };
 
-  const handleDelete = (unix: number) => {
+  const handleDelete = async (unix: number) => {
     const dateReq = {
       year: date!.year(),
       month: date!.month() + 1,
       day: date!.date()
     };
 
-    deleteBill(unix, dateReq);
+    await delBill(initData.id!, initData.mode, origin);
+
+    if (include(origin, LOCALSTORAGE)) {
+      deleteBill(unix, dateReq);
+    }
     setFormData(defaultBillForm);
     setFresh(b => !b);
   };

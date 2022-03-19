@@ -9,6 +9,7 @@ import { BillSpan, BillType, ContainerType } from '@PO/enums';
 interface Props {
   date: DateReq;
   span: BillSpan;
+  fresh: boolean;
 }
 
 const ExApi = {
@@ -240,8 +241,7 @@ function VOFactory(
 }
 
 const useFindBills = (props: Props) => {
-  console.log('useFindBills');
-  const { date, span } = props;
+  const { date, span, fresh } = props;
 
   const [vo, setVO] = useState<
     DayContainerVO | MonthContainerVO | YearContainerVO
@@ -254,7 +254,7 @@ const useFindBills = (props: Props) => {
       const obj = VOFactory(date, span, all[0], all[1]);
       setVO(obj);
     })();
-  }, []);
+  }, [fresh]);
 
   return vo;
 };

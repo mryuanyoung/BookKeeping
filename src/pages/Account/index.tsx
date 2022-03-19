@@ -15,6 +15,7 @@ const Account = () => {
   const [value, setValue] = useState(0);
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState(defaultBillForm);
+  const [fresh, setFresh] = useState(false);
 
   const handleChange = (event: React.SyntheticEvent, newValue: number) => {
     setValue(newValue);
@@ -24,7 +25,10 @@ const Account = () => {
     <div className={style.page}>
       <Drawer anchor="top" open={open} onClose={() => setOpen(false)}>
         <BillForm
-          setFresh={setOpen}
+          setFresh={b => {
+            setOpen(b);
+            setFresh(b);
+          }}
           initData={formData}
           setFormData={setFormData}
         />
@@ -35,10 +39,18 @@ const Account = () => {
         <Tab label="总账单" />
       </Tabs>
       <RouteComponent index={0} curr={value}>
-        <MonthConsumption setFormData={setFormData} setOpen={setOpen} />
+        <MonthConsumption
+          setFormData={setFormData}
+          setOpen={setOpen}
+          fresh={fresh}
+        />
       </RouteComponent>
       <RouteComponent index={1} curr={value}>
-        <YearConsumption setFormData={setFormData} setOpen={setOpen} />
+        <YearConsumption
+          setFormData={setFormData}
+          setOpen={setOpen}
+          fresh={fresh}
+        />
       </RouteComponent>
       <RouteComponent index={2} curr={value}>
         <TotalConsumption setFormData={setFormData} setOpen={setOpen} />

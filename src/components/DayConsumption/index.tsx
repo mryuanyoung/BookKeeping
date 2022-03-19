@@ -9,14 +9,16 @@ import { getNowDate } from '@utils/calendar';
 import useFindBills, { DayContainerVO } from '@hooks/useFindBills';
 import { BillSpan } from '@PO/enums';
 import { DateReq } from '@PO/interfaces';
+import moment from 'moment';
 
 interface Props {
-  fresh?: boolean;
+  fresh: boolean;
   setFormData: Dispatch<SetStateAction<Bill>>;
   date?: DateReq;
 }
 
-const DayConsuption: React.FC<Props> = props => {
+const DayConsuption: React.FC<Props> = React.memo(props => {
+  console.log('day consumption render');
   const { fresh, setFormData, date } = props;
 
   // const { getTodayConsumption } = useBillOperator();
@@ -24,8 +26,11 @@ const DayConsuption: React.FC<Props> = props => {
 
   const dayContainer = useFindBills({
     date: date || getNowDate(),
-    span: BillSpan.Day
+    span: BillSpan.Day,
+    fresh
   }) as DayContainerVO;
+
+  console.log(moment.now(), dayContainer);
 
   return (
     <div>
@@ -42,6 +47,6 @@ const DayConsuption: React.FC<Props> = props => {
       </div>
     </div>
   );
-};
+});
 
 export default DayConsuption;
