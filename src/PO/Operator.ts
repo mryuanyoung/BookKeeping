@@ -13,8 +13,8 @@ function findContainers(root: RootContainer, date: DateReq) {
   return {
     yearCont,
     monthCont,
-    dayCont,
-  }
+    dayCont
+  };
 }
 
 export function create(bill: Bill, root: RootContainer) {
@@ -25,14 +25,17 @@ export function create(bill: Bill, root: RootContainer) {
   dayCont.bills.push(bill);
   if (bill.mode === BillType.Import) {
     dayCont.totalImportAmount += bill.amount;
-  }
-  else {
+  } else {
     dayCont.totalExportAmount += bill.amount;
   }
   replaceRootContainer(root);
 }
 
-export function update(targetBill: Bill, sourceBill: Bill, root: RootContainer,) {
+export function update(
+  targetBill: Bill,
+  sourceBill: Bill,
+  root: RootContainer
+) {
   const unique_unix = targetBill.unix;
   const sourceDate = sourceBill.date;
   const { dayCont: targetDayCont } = findContainers(root, targetBill.date);
@@ -43,33 +46,33 @@ export function update(targetBill: Bill, sourceBill: Bill, root: RootContainer,)
     create(targetBill, root);
     // source中删除
     del(targetBill.unix, sourceDate, root);
-  }
-  else {
+  } else {
     // 修改当日记账
     for (let i = 0, len = targetDayCont.bills.length; i < len; i++) {
       const item = targetDayCont.bills[i];
       if (item.unix === unique_unix) {
         targetDayCont.bills[i] = targetBill;
-        if (targetBill.mode !== sourceBill.mode || targetBill.amount !== sourceBill.amount) {
+        if (
+          targetBill.mode !== sourceBill.mode ||
+          targetBill.amount !== sourceBill.amount
+        ) {
           // 涉及到总额修改
           // 去除source的金额
           if (sourceBill.mode === BillType.Export) {
             targetDayCont.totalExportAmount -= sourceBill.amount;
-          }
-          else {
+          } else {
             targetDayCont.totalImportAmount -= sourceBill.amount;
           }
           // 记录target的金额
           if (targetBill.mode === BillType.Import) {
             targetDayCont.totalImportAmount += targetBill.amount;
-          }
-          else {
+          } else {
             targetDayCont.totalExportAmount += targetBill.amount;
           }
         }
         break;
       }
-    };
+    }
   }
   replaceRootContainer(root);
 }
@@ -82,13 +85,12 @@ export function del(unix: number, date: DateReq, root: RootContainer) {
     if (item.unix === unix) {
       idx = i;
     }
-  };
+  }
   if (idx < 0) throw Error('删除失败');
   const bill = dayCont.bills[idx];
   if (bill.mode === BillType.Import) {
     dayCont.totalImportAmount -= bill.amount;
-  }
-  else {
+  } else {
     dayCont.totalExportAmount -= bill.amount;
   }
   dayCont.bills.splice(idx, 1);
@@ -122,26 +124,26 @@ export function clearAndReCalcAccount(root: RootContainer) {
       monthCont.totalImportAmount = 0;
 
       (monthCont as SpanContainer).containers.forEach(dayCont => {
-        const DayCont = (dayCont as DayContainer);
+        const DayCont = dayCont as DayContainer;
         DayCont.totalImportAmount = 0;
         DayCont.totalExportAmount = 0;
 
-        DayCont.bills && DayCont.bills.forEach(dayBill => {
-          if (dayBill.mode === BillType.Export) {
-            DayCont.totalExportAmount += dayBill.amount;
-          }
-          else {
-            DayCont.totalImportAmount += dayBill.amount;
-          }
-        })
+        DayCont.bills &&
+          DayCont.bills.forEach(dayBill => {
+            if (dayBill.mode === BillType.Export) {
+              DayCont.totalExportAmount += dayBill.amount;
+            } else {
+              DayCont.totalImportAmount += dayBill.amount;
+            }
+          });
 
         monthCont.totalExportAmount += DayCont.totalExportAmount;
         monthCont.totalImportAmount += DayCont.totalImportAmount;
-      })
+      });
 
       yearCont.totalExportAmount += monthCont.totalExportAmount;
       yearCont.totalImportAmount += monthCont.totalImportAmount;
-    })
-  })
+    });
+  });
   replaceRootContainer(root);
 }

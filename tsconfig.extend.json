@@ -26,6 +26,9 @@
       "@interfaces/*": [
         "src/interfaces/*"
       ],
+      "@database/*": [
+        "src/database/*"
+      ],
     }
   }
 }

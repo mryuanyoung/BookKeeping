@@ -1,4 +1,4 @@
-import React, { useState, Dispatch, SetStateAction } from "react";
+import React, { useState, Dispatch, SetStateAction } from 'react';
 
 import FormControl from '@material-ui/core/FormControl';
 import FormHelperText from '@material-ui/core/FormHelperText';
@@ -21,9 +21,19 @@ interface Props {
   type?: string;
 }
 
-const MyInput: React.FC<Props> = (props) => {
-
-  const { label, value, setValue, style, className = '', errMsg = '', number = false, outlined = false, prefix = '', type = 'text' } = props;
+const MyInput: React.FC<Props> = props => {
+  const {
+    label,
+    value,
+    setValue,
+    style,
+    className = '',
+    errMsg = '',
+    number = false,
+    outlined = false,
+    prefix = '',
+    type = 'text'
+  } = props;
 
   const [error, setError] = useState(false);
 
@@ -32,25 +42,39 @@ const MyInput: React.FC<Props> = (props) => {
   const handleChange = (value: string) => {
     setValue(value);
     if (number) {
-      setError((!!value && (parseFloat(value) + '' !== value)));
+      setError(!!value && parseFloat(value) + '' !== value);
     }
-  }
+  };
 
   return (
-    <FormControl style={style} className={className} variant={outlined ? 'outlined' : 'standard'}>
+    <FormControl
+      style={style}
+      className={className}
+      variant={outlined ? 'outlined' : 'standard'}
+    >
       <InputLabel error={error}>{label}</InputLabel>
       <InputElement
         type={type}
         label={label}
         error={error}
         value={value}
-        onChange={(e) => handleChange(e.target.value)}
-        startAdornment={prefix ? <InputAdornment position="start">{prefix}</InputAdornment> : null}
-        endAdornment={value ? <ClearIcon color={error ? 'error' : 'primary'} fontSize="small" onClick={() => handleChange('')} /> : null}
+        onChange={e => handleChange(e.target.value)}
+        startAdornment={
+          prefix ? (
+            <InputAdornment position="start">{prefix}</InputAdornment>
+          ) : null
+        }
+        endAdornment={
+          value ? (
+            <ClearIcon
+              color={error ? 'error' : 'primary'}
+              fontSize="small"
+              onClick={() => handleChange('')}
+            />
+          ) : null
+        }
       />
-      {
-        error ? <FormHelperText error>{errMsg}</FormHelperText> : null
-      }
+      {error ? <FormHelperText error>{errMsg}</FormHelperText> : null}
     </FormControl>
   );
 };
