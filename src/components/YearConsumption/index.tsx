@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useContext, useEffect } from 'react';
 import MonthConsumption from '@components/MonthConsumption';
 import useBillOperator from '@hooks/useBillOperator';
 import { Bill } from '@PO/Bill';
@@ -11,6 +11,8 @@ import AccordionDetails from '@material-ui/core/AccordionDetails';
 import ExpandMoreIcon from '@material-ui/icons/ExpandMore';
 import useFindBills, { YearContainerVO } from '@hooks/useFindBills';
 import { BillSpan } from '@PO/enums';
+import { Button } from '@material-ui/core';
+import { ChartCtx } from '@pages/Account';
 
 interface Props {
   setFormData: React.Dispatch<React.SetStateAction<Bill>>;
@@ -22,6 +24,7 @@ interface Props {
 
 const YearConsumption: React.FC<Props> = React.memo(props => {
   const { setFormData, setOpen, date, fresh = false, data } = props;
+  const { setChart } = useContext(ChartCtx);
   // const { getYearConsumption } = useBillOperator();
 
   // const container = getYearConsumption(date || getNowDate());
@@ -34,11 +37,15 @@ const YearConsumption: React.FC<Props> = React.memo(props => {
       fresh
     }) as YearContainerVO);
 
+  useEffect(() => {
+    setChart(yearContainer);
+  }, [yearContainer]);
+
   return (
     <div>
       <div>支出：{yearContainer.totalExportAmount.toFixed(1)}</div>
       <div>收入：{yearContainer.totalImportAmount.toFixed(1)}</div>
-      {yearContainer.monthContainer
+      {yearContainer.containers
         .map(monthCont => {
           const nowDate = getNowDate();
           if (

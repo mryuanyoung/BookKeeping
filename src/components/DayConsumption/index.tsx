@@ -30,8 +30,6 @@ const DayConsuption: React.FC<Props> = React.memo(props => {
     fresh
   }) as DayContainerVO;
 
-  console.log(moment.now(), dayContainer);
-
   return (
     <div>
       {/* <div>今日支出: {container.totalExportAmount.toFixed(1)}</div>

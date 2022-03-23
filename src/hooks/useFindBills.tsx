@@ -3,7 +3,13 @@ import { getNowDate } from '@utils/calendar';
 import { useEffect, useState } from 'react';
 import * as ex from '@database/exportBillOp';
 import * as im from '@database/importBillOp';
-import { DateAttr, DateReq, DayContainer, Container } from '@PO/interfaces';
+import {
+  DateAttr,
+  DateReq,
+  DayContainer,
+  Container,
+  SpanContainer
+} from '@PO/interfaces';
 import { BillSpan, BillType, ContainerType } from '@PO/enums';
 
 interface Props {
@@ -59,12 +65,12 @@ export class DayContainerVO implements DayContainer {
   }
 }
 
-export class MonthContainerVO implements Container {
+export class MonthContainerVO implements SpanContainer {
   type: ContainerType;
   dateAttr: DateAttr;
   totalImportAmount: number;
   totalExportAmount: number;
-  dayContainers: DayContainerVO[];
+  containers: DayContainerVO[];
 
   constructor(
     type: ContainerType,
@@ -75,7 +81,7 @@ export class MonthContainerVO implements Container {
     this.type = type;
     this.dateAttr = dateAttr;
 
-    this.dayContainers = Array(31);
+    this.containers = Array(31);
     if (!(exportBills && importBills)) {
       this.totalExportAmount = 0;
       this.totalImportAmount = 0;
@@ -87,7 +93,7 @@ export class MonthContainerVO implements Container {
 
     let totalImport = 0,
       totalExport = 0;
-    this.dayContainers.forEach(dayContainer => {
+    this.containers.forEach(dayContainer => {
       let im = 0,
         ex = 0;
       dayContainer.bills.forEach(bill => {
@@ -108,23 +114,23 @@ export class MonthContainerVO implements Container {
 
   mapBillToContainer(bills: Bill[]) {
     bills.forEach(bill => {
-      if (!this.dayContainers[bill.date.day - 1]) {
-        this.dayContainers[bill.date.day - 1] = new DayContainerVO(
+      if (!this.containers[bill.date.day - 1]) {
+        this.containers[bill.date.day - 1] = new DayContainerVO(
           ContainerType.Day,
           bill.date
         );
       }
-      this.dayContainers[bill.date.day - 1].bills.push(bill);
+      this.containers[bill.date.day - 1].bills.push(bill);
     });
   }
 }
 
-export class YearContainerVO implements Container {
+export class YearContainerVO implements SpanContainer {
   type: ContainerType;
   dateAttr: DateAttr;
   totalImportAmount: number;
   totalExportAmount: number;
-  monthContainer: MonthContainerVO[];
+  containers: MonthContainerVO[];
 
   constructor(
     type: ContainerType,
@@ -134,7 +140,7 @@ export class YearContainerVO implements Container {
   ) {
     this.type = type;
     this.dateAttr = dateAttr;
-    this.monthContainer = Array(12);
+    this.containers = Array(12);
     if (!(exportBills && importBills)) {
       this.totalExportAmount = 0;
       this.totalImportAmount = 0;
@@ -146,11 +152,11 @@ export class YearContainerVO implements Container {
 
     let totalImport = 0,
       totalExport = 0;
-    this.monthContainer.forEach(monthContainer => {
+    this.containers.forEach(monthContainer => {
       let mex = 0,
         mim = 0;
 
-      monthContainer.dayContainers.forEach(dayContainer => {
+      monthContainer.containers.forEach(dayContainer => {
         let im = 0,
           ex = 0;
 
@@ -179,25 +185,20 @@ export class YearContainerVO implements Container {
 
   mapBillToContainer(bills: Bill[]) {
     bills.forEach(bill => {
-      if (!this.monthContainer[bill.date.month - 1]) {
-        this.monthContainer[bill.date.month - 1] = new MonthContainerVO(
+      if (!this.containers[bill.date.month - 1]) {
+        this.containers[bill.date.month - 1] = new MonthContainerVO(
           ContainerType.Month,
           bill.date
         );
       }
 
-      if (
-        !this.monthContainer[bill.date.month - 1].dayContainers[
-          bill.date.day - 1
-        ]
-      ) {
-        this.monthContainer[bill.date.month - 1].dayContainers[
-          bill.date.day - 1
-        ] = new DayContainerVO(ContainerType.Day, bill.date);
+      if (!this.containers[bill.date.month - 1].containers[bill.date.day - 1]) {
+        this.containers[bill.date.month - 1].containers[bill.date.day - 1] =
+          new DayContainerVO(ContainerType.Day, bill.date);
       }
 
       try {
-        this.monthContainer[bill.date.month - 1].dayContainers[
+        this.containers[bill.date.month - 1].containers[
           bill.date.day - 1
         ].bills.push(bill);
       } catch (err) {
