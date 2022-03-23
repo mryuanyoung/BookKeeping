@@ -186,7 +186,7 @@ function convertData(
 
 const BarChart: React.FC<Props> = props => {
   const { type } = props;
-  const ref = useRef(null);
+  const ref = useRef<HTMLDivElement>(null);
   const chart = useRef<echarts.EChartsType>();
   const { chart: data } = useContext(ChartCtx);
 

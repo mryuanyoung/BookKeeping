@@ -142,7 +142,7 @@ interface Props {
 
 const PieChart: React.FC<Props> = React.memo(props => {
   const { type } = props;
-  const ref = useRef(null);
+  const ref = useRef<HTMLDivElement>(null);
   const chart = useRef<echarts.EChartsType>();
   const { chart: data } = useContext(ChartCtx);
 
