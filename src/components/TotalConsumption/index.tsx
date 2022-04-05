@@ -10,6 +10,7 @@ import AccordionSummary from '@material-ui/core/AccordionSummary';
 import AccordionDetails from '@material-ui/core/AccordionDetails';
 import ExpandMoreIcon from '@material-ui/icons/ExpandMore';
 import YearConsumption from '@components/YearConsumption';
+import { Divider } from '@material-ui/core';
 
 const now = getNowDate();
 const years = Array(now.year - 2021 + 1)
@@ -32,14 +33,14 @@ const TotalConsumption: React.FC<Props> = React.memo(props => {
   return (
     <div>
       {years.map(year => (
-        <div>
-          {year}年:
+        <div style={{ marginBottom: '2vh' }}>
           <YearConsumption
             key={year}
             setFormData={setFormData}
             setOpen={setOpen}
             date={{ year, month: 1, day: 1 }}
           />
+          <Divider variant="fullWidth" style={{ marginTop: '2vh' }} />
         </div>
       ))}
       {/* <YearConsumption

@@ -110,7 +110,9 @@ const SalaryCalc = () => {
     一次性收入：${INPUTS.OOT}
     全年税前所得：${TotalImport}
     -----------------------------
-    五险缴纳：${PersonFiveInsure} * 12 = ${PersonFiveInsure * 12}
+    五险缴纳：${PersonFiveInsure.toFixed(1)} * 12 = ${(
+      PersonFiveInsure * 12
+    ).toFixed(1)}
     公积金缴纳：${Fund} * 12 = ${Fund * 12}
     个税缴纳：${TotalTax}
     -----------------------------

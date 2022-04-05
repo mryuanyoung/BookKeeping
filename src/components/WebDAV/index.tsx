@@ -68,7 +68,7 @@ const WebDAV = () => {
   };
 
   return (
-    <div>
+    <div style={{ width: '60%' }}>
       <Modal open={baseInfoVisi} onClose={() => setBaseInfoVisi(false)}>
         <Box
           component="form"
@@ -98,7 +98,11 @@ const WebDAV = () => {
           </Button>
         </Box>
       </Modal>
-      <Button variant="outlined" onClick={() => setBaseInfoVisi(true)}>
+      <Button
+        variant="outlined"
+        onClick={() => setBaseInfoVisi(true)}
+        style={{ width: '100%', marginBottom: '2vh' }}
+      >
         基本信息
       </Button>
       <LoadingButton

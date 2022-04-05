@@ -4,7 +4,6 @@ import BarChart from './barChart';
 import PieChart from './pieChart';
 
 const StatChart = () => {
-  console.log('stat chart render');
   return (
     <div
       style={{
