@@ -13,6 +13,7 @@ import useFindBills, { YearContainerVO } from '@hooks/useFindBills';
 import { BillSpan } from '@PO/enums';
 import { Button } from '@material-ui/core';
 import { ChartCtx } from '@pages/Account';
+import Tag from '@components/Tag';
 
 interface Props {
   setFormData: React.Dispatch<React.SetStateAction<Bill>>;
@@ -43,8 +44,25 @@ const YearConsumption: React.FC<Props> = React.memo(props => {
 
   return (
     <div>
-      <div>支出：{yearContainer.totalExportAmount.toFixed(1)}</div>
-      <div>收入：{yearContainer.totalImportAmount.toFixed(1)}</div>
+      {/* <div>支出：{yearContainer.totalExportAmount.toFixed(1)}</div>
+      <div>收入：{yearContainer.totalImportAmount.toFixed(1)}</div> */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginTop: '1.5vh',
+          marginBottom: '1.5vh'
+        }}
+      >
+        <Tag bdColor="#ffa39e" bgColor="#fff1f0" ftColor="#cf1322">
+          {yearContainer.dateAttr.year}年总支出:{' '}
+          {yearContainer.totalExportAmount.toFixed(1)}
+        </Tag>
+        <Tag bdColor="#b7eb8f" bgColor="#f6ffed" ftColor="#389e0d">
+          {yearContainer.dateAttr.year}年总收入:{' '}
+          {yearContainer.totalImportAmount.toFixed(1)}
+        </Tag>
+      </div>
       {yearContainer.containers
         .map(monthCont => {
           const nowDate = getNowDate();
@@ -57,9 +75,13 @@ const YearConsumption: React.FC<Props> = React.memo(props => {
 
           return (
             <Accordion
+              style={{ width: '97%', margin: '0 auto', marginBottom: '1vh' }}
               key={monthCont.dateAttr.year + monthCont.dateAttr.month!}
             >
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                style={{ backgroundColor: '#fcffe6' }}
+              >
                 {monthCont.dateAttr.month}月 支出：
                 {monthCont.totalExportAmount.toFixed(1)} 收入：
                 {monthCont.totalImportAmount.toFixed(1)}

@@ -4,7 +4,7 @@ import BillForm from '../../components/BillForm';
 import DayConsuption from '@components/DayConsumption';
 
 import { defaultBillForm } from '@constants/bill';
-import { Divider } from '@material-ui/core';
+import { Divider, Card, CardContent } from '@material-ui/core';
 import useBillOperator from '@hooks/useBillOperator';
 
 const BillPage = function () {
@@ -12,15 +12,21 @@ const BillPage = function () {
   const [formData, setFormData] = useState(defaultBillForm);
 
   return (
-    <div className={style.page}>
-      <BillForm
-        setFresh={setFresh}
-        initData={formData}
-        setFormData={setFormData}
-      />
+    <Card sx={{ width: '100%', height: '100%' }}>
+      {/* <div className={style.page}> */}
+      <CardContent sx={{ minHeight: '65%' }}>
+        <BillForm
+          setFresh={setFresh}
+          initData={formData}
+          setFormData={setFormData}
+        />
+      </CardContent>
       <Divider variant="fullWidth" />
-      <DayConsuption fresh={fresh} setFormData={setFormData} />
-    </div>
+      <CardContent sx={{ overflow: 'auto', height: '35%' }}>
+        <DayConsuption fresh={fresh} setFormData={setFormData} />
+      </CardContent>
+    </Card>
+    // </div>
   );
 };
 

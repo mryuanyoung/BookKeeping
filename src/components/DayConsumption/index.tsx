@@ -10,6 +10,7 @@ import useFindBills, { DayContainerVO } from '@hooks/useFindBills';
 import { BillSpan } from '@PO/enums';
 import { DateReq } from '@PO/interfaces';
 import moment from 'moment';
+import Tag from '@components/Tag';
 
 interface Props {
   fresh: boolean;
@@ -18,7 +19,6 @@ interface Props {
 }
 
 const DayConsuption: React.FC<Props> = React.memo(props => {
-  console.log('day consumption render');
   const { fresh, setFormData, date } = props;
 
   // const { getTodayConsumption } = useBillOperator();
@@ -34,8 +34,22 @@ const DayConsuption: React.FC<Props> = React.memo(props => {
     <div>
       {/* <div>今日支出: {container.totalExportAmount.toFixed(1)}</div>
       <div>今日收入: {container.totalImportAmount.toFixed(1)}</div> */}
-      <div>今日支出: {dayContainer.totalExportAmount}</div>
-      <div>今日收入: {dayContainer.totalImportAmount}</div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginBottom: '1.5vh'
+        }}
+      >
+        <Tag bdColor="#ffa39e" bgColor="#fff1f0" ftColor="#cf1322">
+          今日支出: {dayContainer.totalExportAmount}
+        </Tag>
+        <Tag bdColor="#b7eb8f" bgColor="#f6ffed" ftColor="#389e0d">
+          今日收入: {dayContainer.totalImportAmount}
+        </Tag>
+      </div>
+      {/* <div>今日支出: {dayContainer.totalExportAmount}</div>
+      <div>今日收入: {dayContainer.totalImportAmount}</div> */}
       <div>
         {dayContainer.bills.map(bill => (
           <div onClick={e => setFormData(bill)} key={bill.id}>

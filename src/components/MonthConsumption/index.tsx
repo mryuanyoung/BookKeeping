@@ -23,6 +23,7 @@ import useFindBills, { MonthContainerVO } from '@hooks/useFindBills';
 import { BillSpan } from '@PO/enums';
 import StatChart from '@components/StatChart';
 import { ChartCtx } from '@pages/Account';
+import Tag from '@components/Tag';
 interface Props {
   setFormData: React.Dispatch<React.SetStateAction<Bill>>;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -32,7 +33,6 @@ interface Props {
 }
 
 const MonthConsumption: React.FC<Props> = React.memo(props => {
-  console.log('month consumption render');
   const { setFormData, setOpen, date, fresh = false, data } = props;
   const { setChart } = useContext(ChartCtx);
   // const { getMonthConsumption } = useBillOperator();
@@ -62,8 +62,23 @@ const MonthConsumption: React.FC<Props> = React.memo(props => {
       {monthCont.containers
         .map((dayCont, idx) => {
           const bills = (dayCont as DayContainer).bills || []; */}
-      <div>支出：{monthContainer.totalExportAmount.toFixed(1)}</div>
-      <div>收入：{monthContainer.totalImportAmount.toFixed(1)}</div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginTop: '1.5vh',
+          marginBottom: '1.5vh'
+        }}
+      >
+        <Tag bdColor="#ffa39e" bgColor="#fff1f0" ftColor="#cf1322">
+          {monthContainer.dateAttr.month}月总支出:{' '}
+          {monthContainer.totalExportAmount.toFixed(1)}
+        </Tag>
+        <Tag bdColor="#b7eb8f" bgColor="#f6ffed" ftColor="#389e0d">
+          {monthContainer.dateAttr.month}月总收入:{' '}
+          {monthContainer.totalImportAmount.toFixed(1)}
+        </Tag>
+      </div>
       {monthContainer.containers
         .map((dayCont, idx) => {
           const bills = dayCont.bills;
@@ -72,20 +87,35 @@ const MonthConsumption: React.FC<Props> = React.memo(props => {
           if (bills.length === 0 || (!date && day > today)) return;
           return (
             <Accordion
+              style={{ width: '97%', margin: '0 auto', marginBottom: '1vh' }}
               key={
                 dayCont.dateAttr.year +
                 dayCont.dateAttr.month! +
                 dayCont.dateAttr.day!
               }
             >
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                style={{ backgroundColor: '#e6f7ff' }}
+              >
                 <div>
-                  {dayCont.dateAttr.day}号 支出：
-                  {dayCont.totalExportAmount.toFixed(1)} 收入：
-                  {dayCont.totalImportAmount.toFixed(1)}
+                  <Tag
+                    ftColor="#096dd9"
+                    bgColor="#e6f7ff"
+                    bdColor="#91d5ff"
+                    style={{ marginBottom: '0' }}
+                  >
+                    {dayCont.dateAttr.day}号
+                  </Tag>
+                  <span style={{ marginLeft: '2vw' }}>
+                    支出:&nbsp;
+                    {dayCont.totalExportAmount.toFixed(1)}
+                    &nbsp;&nbsp;&nbsp;收入：
+                    {dayCont.totalImportAmount.toFixed(1)}
+                  </span>
                 </div>
               </AccordionSummary>
-              <AccordionDetails>
+              <AccordionDetails style={{ backgroundColor: '#fafafa' }}>
                 {bills.map(bill => (
                   <div key={bill.unix} onClick={() => handleOpen(bill)}>
                     <DayConsuptionItem bill={bill} />
