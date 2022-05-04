@@ -57,3 +57,11 @@ export const deleteCompany = (name: string) => {
   delete companies[name];
   localStorage.setItem('companies', JSON.stringify(companies));
 };
+
+export const getWebDAVAccount = () => {
+  const account = JSON.parse(localStorage.getItem('account') || '{}');
+  return {
+    password: account.password,
+    username: account.username
+  };
+};

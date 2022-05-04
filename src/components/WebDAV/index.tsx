@@ -1,9 +1,12 @@
 import Input from '@components/Input';
+import { getAllData } from '@database/db';
 import useBillOperator from '@hooks/useBillOperator';
-import { Button, Modal, Box, Snackbar } from '@material-ui/core';
+import { Button, Modal, Box, Snackbar, Alert } from '@material-ui/core';
 import { LoadingButton } from '@material-ui/lab';
-import { useState } from 'react';
+import { ToastCtx } from '@pages/People';
+import { useState, useContext } from 'react';
 import { backupData } from '../../api/webdav';
+import FileListModal from './FIleListModal';
 
 const style = {
   position: 'absolute',
@@ -19,11 +22,14 @@ const style = {
 
 const WebDAV = () => {
   const [baseInfoVisi, setBaseInfoVisi] = useState(false);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [toast, setToast] = useState('');
+
+  const webdavAccount = JSON.parse(localStorage.getItem('account') || '{}');
+
+  const [username, setUsername] = useState(webdavAccount.username || '');
+  const [password, setPassword] = useState(webdavAccount.password || '');
+  const { setToast } = useContext(ToastCtx);
   const [loading, setLoading] = useState(false);
-  const { showAccount } = useBillOperator();
+  const [fileListModal, setFileListModal] = useState(false);
 
   const handleSubmit = () => {
     if (!username || !password) {
@@ -53,14 +59,15 @@ const WebDAV = () => {
     setLoading(true);
 
     try {
-      const json = JSON.stringify(showAccount());
-      const res = await backupData(json, account.username, account.password);
+      const json = await getAllData();
+      const res = await backupData(JSON.stringify(json));
       if (res.success) {
         setToast('备份成功!');
       } else {
         setToast('备份失败!');
       }
     } catch (err) {
+      setToast('备份失败!');
       console.error(err);
     } finally {
       setLoading(false);
@@ -69,12 +76,19 @@ const WebDAV = () => {
 
   return (
     <div style={{ width: '60%' }}>
+      <FileListModal
+        visible={fileListModal}
+        close={() => setFileListModal(false)}
+      />
       <Modal open={baseInfoVisi} onClose={() => setBaseInfoVisi(false)}>
         <Box
           component="form"
           sx={{
             '& > :not(style)': { m: 1 },
-            background: 'white'
+            background: 'white',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
           }}
           noValidate
           autoComplete="off"
@@ -87,13 +101,18 @@ const WebDAV = () => {
             label="用户名"
           />
           <Input
+            type="password"
             style={{ width: '80vw' }}
             value={password}
             setValue={setPassword}
             outlined
             label="密码"
           />
-          <Button variant="outlined" onClick={handleSubmit}>
+          <Button
+            variant="outlined"
+            onClick={handleSubmit}
+            style={{ marginBottom: '2vh' }}
+          >
             保存
           </Button>
         </Box>
@@ -103,7 +122,14 @@ const WebDAV = () => {
         onClick={() => setBaseInfoVisi(true)}
         style={{ width: '100%', marginBottom: '2vh' }}
       >
-        基本信息
+        云盘账户
+      </Button>
+      <Button
+        variant="outlined"
+        onClick={() => setFileListModal(true)}
+        style={{ width: '100%', marginBottom: '2vh' }}
+      >
+        云盘导入
       </Button>
       <LoadingButton
         variant="outlined"
@@ -112,12 +138,6 @@ const WebDAV = () => {
       >
         云盘备份
       </LoadingButton>
-      <Snackbar
-        open={toast !== ''}
-        onClose={() => setToast('')}
-        autoHideDuration={2000}
-        message={toast}
-      />
     </div>
   );
 };

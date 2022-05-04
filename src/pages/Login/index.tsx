@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useContext, useState } from 'react';
 import { Paper, Snackbar } from '@material-ui/core';
 import { Button, Box } from '@material-ui/core';
 import Input from '@components/Input';
@@ -9,6 +9,7 @@ import icon from '@assets/icon_trans.png';
 import style from './index.module.scss';
 
 import { useNavigate } from 'react-router-dom';
+import { ToastCtx } from '@pages/People';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -16,7 +17,7 @@ const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPswd] = useState('');
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState('');
+  const { setToast } = useContext(ToastCtx);
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -100,12 +101,6 @@ const Login = () => {
           </div>
         </Box>
       </Paper>
-      <Snackbar
-        open={toast !== ''}
-        onClose={() => setToast('')}
-        autoHideDuration={2000}
-        message={toast}
-      />
     </Paper>
   );
 };
