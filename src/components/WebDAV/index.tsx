@@ -30,6 +30,7 @@ const WebDAV = () => {
   const { setToast } = useContext(ToastCtx);
   const [loading, setLoading] = useState(false);
   const [fileListModal, setFileListModal] = useState(false);
+  const [fileLoading, setFileLoading] = useState(false);
 
   const handleSubmit = () => {
     if (!username || !password) {
@@ -77,8 +78,10 @@ const WebDAV = () => {
   return (
     <div style={{ width: '60%' }}>
       <FileListModal
+        loading={fileLoading}
         visible={fileListModal}
         close={() => setFileListModal(false)}
+        stopLoading={() => setFileLoading(false)}
       />
       <Modal open={baseInfoVisi} onClose={() => setBaseInfoVisi(false)}>
         <Box
@@ -124,13 +127,17 @@ const WebDAV = () => {
       >
         云盘账户
       </Button>
-      <Button
+      <LoadingButton
+        loading={fileLoading}
         variant="outlined"
-        onClick={() => setFileListModal(true)}
+        onClick={() => {
+          setFileListModal(true);
+          setFileLoading(true);
+        }}
         style={{ width: '100%', marginBottom: '2vh' }}
       >
         云盘导入
-      </Button>
+      </LoadingButton>
       <LoadingButton
         variant="outlined"
         onClick={webDAVBackup}

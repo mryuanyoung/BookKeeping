@@ -6,11 +6,13 @@ import { FileStat, getFileContent, getFileList } from '../../api/webdav';
 
 interface Props {
   visible: boolean;
+  loading: boolean;
   close: () => void;
+  stopLoading: () => void;
 }
 
 const FileListModal: React.FC<Props> = props => {
-  const { visible, close } = props;
+  const { visible, close, stopLoading, loading } = props;
   const [files, setFiles] = useState<FileStat[]>([]);
   const { setToast } = useContext(ToastCtx);
 
@@ -25,6 +27,7 @@ const FileListModal: React.FC<Props> = props => {
         if (!success) {
           return;
         }
+        stopLoading();
         setFiles(res);
       } catch (err) {
         console.error(err);
@@ -48,10 +51,11 @@ const FileListModal: React.FC<Props> = props => {
   };
 
   return (
-    <Modal open={visible} onClose={close}>
+    <Modal open={visible && !loading} onClose={close} keepMounted>
       <div style={{ backgroundColor: 'white', padding: '1vh' }}>
         {files.map(file => (
           <div
+            key={file.filename}
             style={{
               display: 'flex',
               justifyContent: 'center',
