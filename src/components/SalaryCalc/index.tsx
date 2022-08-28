@@ -270,7 +270,17 @@ const SalaryCalc = () => {
           <Input
             number
             outlined
-            style={{ width: '55vw' }}
+            style={{ width: '25vw' }}
+            errMsg="请输入数字"
+            label="公积金基数"
+            // prefix="%"
+            value={inputs.fundBase}
+            setValue={(v: string) => setInputs(o => ({ ...o, fundBase: v }))}
+          />
+          <Input
+            number
+            outlined
+            style={{ width: '25vw' }}
             errMsg="请输入数字"
             label="公积金比例"
             prefix="%"

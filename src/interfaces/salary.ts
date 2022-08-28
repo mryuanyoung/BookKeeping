@@ -14,6 +14,7 @@ export interface InfoType {
 export interface InputProps {
   base: string; // 月薪
   bonus: string; // 年终奖
+  fundBase: string; // 公积金基数
   fundRate: string; // 公积金比例
   fundLimit: string; // 公积金上限
   extraBonus: InfoType[]; // 其他年终奖励

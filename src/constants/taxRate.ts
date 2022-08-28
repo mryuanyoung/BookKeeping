@@ -40,6 +40,7 @@ export const TaxTable = [
 export const getDefaultInputs = (): InputProps => ({
   base: '',
   bonus: '',
+  fundBase: '0',
   fundRate: '12',
   fundLimit: CityAverageSalary[0].salary + '',
   extraBonus: [{ remark: '', amount: '' }],
