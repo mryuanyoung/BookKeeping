@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Drawer from '@material-ui/core/Drawer';
 import Button from '@material-ui/core/Button';
 import Input from '@components/Input';
@@ -30,6 +30,7 @@ import {
   preserveSalary
 } from '@utils/localStore';
 import { Divider } from '@material-ui/core';
+import { Salary } from './salary';
 
 function convertToNumber(inputs: InputProps) {
   const res: { [key: string]: any } = {};
@@ -48,6 +49,8 @@ function convertToNumber(inputs: InputProps) {
   return res;
 }
 
+const salaryInstance = new Salary();
+
 const SalaryCalc = () => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -55,12 +58,34 @@ const SalaryCalc = () => {
   const [calcRes, setCalcRes] = useState('');
   const [bonusType, setBonusType] = useState(0);
   const [inputs, setInputs] = useState(getDefaultInputs());
+  // const salaryInstance = useRef(new Salary());
 
   const handleChangeBonusType = (event: any) => {
     setBonusType(event.target.value);
   };
 
+  const _calculate = () => {
+    const INPUTS = convertToNumber(inputs);
+
+    salaryInstance.setField(INPUTS, bonusType);
+    const totalFund = salaryInstance.fund * 2 * 12;
+
+    const res = `
+    税前总包：${salaryInstance.beforeTaxYearSalary}
+    五险：${salaryInstance.fiveInsurances}
+    单边公积金：${salaryInstance.fund}
+    个税：${salaryInstance.totalTax}
+    总包： ${salaryInstance.totalSalary}（其中现金${
+      salaryInstance.totalSalary - totalFund
+    }，公积金${totalFund}）
+    `;
+
+    setCalcRes(res);
+  };
+
   const calculate = () => {
+    _calculate();
+    return;
     const INPUTS = convertToNumber(inputs);
     // 五险一金缴纳基数
     const Subsidy = INPUTS.subsidy.reduce(
