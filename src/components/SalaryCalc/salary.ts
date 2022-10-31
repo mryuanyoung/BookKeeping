@@ -94,6 +94,7 @@ export class Salary {
     let idx = 0;
     for (let len = TaxLevel.length; idx < len; idx++) {
       if (taxBase < TaxLevel[idx]) {
+        idx--;
         break;
       }
     }
@@ -103,7 +104,10 @@ export class Salary {
 
   get totalSalary() {
     return (
-      this.beforeTaxYearSalary - this.fiveInsurances - this.totalTax + this.fund
+      this.beforeTaxYearSalary -
+      this.totalTax -
+      this.fiveInsurances * 12 +
+      this.fund * 12
     );
   }
 
