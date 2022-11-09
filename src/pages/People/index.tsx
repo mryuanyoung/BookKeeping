@@ -26,6 +26,7 @@ import SalaryCalc from '@components/SalaryCalc';
 import WebDAV from '@components/WebDAV';
 import { useNavigate } from 'react-router-dom';
 import { exportData, importJSONToIndexedDB } from '@database/db';
+import HousingFundCalc from '@components/HousingFundCalc';
 
 export const ToastCtx = createContext({
   toast: '',
@@ -96,6 +97,7 @@ const People = () => {
               style={{ backgroundColor: '#fffbe6' }}
             >
               <SalaryCalc />
+              <HousingFundCalc />
             </Paper>
           </div>
 
