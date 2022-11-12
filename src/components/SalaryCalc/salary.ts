@@ -98,6 +98,8 @@ export class Salary {
         break;
       }
     }
+
+    idx = Math.min(idx, 6);
     const totalTax = taxBase * TaxTable[idx][0] - TaxTable[idx][1];
     return Math.max(0, totalTax);
   }
