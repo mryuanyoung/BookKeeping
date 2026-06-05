@@ -511,7 +511,7 @@ class MainActivity : Activity() {
         EditText(this).apply {
             this.hint = hint
             setText(value)
-            singleLine = true
+            setSingleLine(true)
             if (decimal) inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
 
