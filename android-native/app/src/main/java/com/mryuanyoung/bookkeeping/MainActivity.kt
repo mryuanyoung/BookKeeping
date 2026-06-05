@@ -517,6 +517,7 @@ class MainActivity : Activity() {
 
     private fun radio(label: String, value: String, checked: Boolean): RadioButton =
         RadioButton(this).apply {
+            id = View.generateViewId()
             text = label
             tag = value
             isChecked = checked
@@ -531,7 +532,7 @@ class MainActivity : Activity() {
 
     private fun selectedMode(group: RadioGroup): BillMode {
         val radio = group.findViewById<RadioButton>(group.checkedRadioButtonId)
-        return BillMode.valueOf(radio.tag.toString())
+        return BillMode.valueOf(radio?.tag?.toString() ?: BillMode.Export.name)
     }
 
     private fun runNetwork(success: String, task: () -> Unit) {
