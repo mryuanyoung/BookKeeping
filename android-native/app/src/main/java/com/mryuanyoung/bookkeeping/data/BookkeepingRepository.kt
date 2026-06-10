@@ -58,6 +58,18 @@ class BookkeepingRepository(context: Context) :
 
     fun findAll(): List<Bill> = query(null, emptyArray())
 
+    fun availableYears(): List<Int> {
+        val cursor = readableDatabase.rawQuery("SELECT DISTINCT year FROM bills ORDER BY year DESC", null)
+        cursor.use {
+            val years = mutableListOf<Int>()
+            while (it.moveToNext()) years.add(it.getInt(0))
+            return years
+        }
+    }
+
+    fun monthlySummary(year: Int): List<Pair<Int, BillSummary>> =
+        (1..12).map { month -> month to summary(findByMonth(year, month)) }
+
     fun summary(bills: List<Bill>): BillSummary {
         val income = bills.filter { it.mode == BillMode.Import }.sumOf { it.amount }
         val expense = bills.filter { it.mode == BillMode.Export }.sumOf { it.amount }

@@ -4,22 +4,63 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.text.InputType
 import android.view.Gravity
 import android.view.View
-import android.widget.*
-import com.mryuanyoung.bookkeeping.calc.*
-import com.mryuanyoung.bookkeeping.data.*
-import java.io.File
+import android.view.ViewGroup
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
+import android.widget.ScrollView
+import android.widget.Spinner
+import android.widget.TextView
+import android.widget.Toast
+import com.mryuanyoung.bookkeeping.calc.EstateCalculator
+import com.mryuanyoung.bookkeeping.calc.EstateInput
+import com.mryuanyoung.bookkeeping.calc.HousingFundCalculator
+import com.mryuanyoung.bookkeeping.calc.Loan
+import com.mryuanyoung.bookkeeping.calc.PaymentType
+import com.mryuanyoung.bookkeeping.calc.SalaryCalculator
+import com.mryuanyoung.bookkeeping.calc.SalaryInput
+import com.mryuanyoung.bookkeeping.data.BackupFiles
+import com.mryuanyoung.bookkeeping.data.Bill
+import com.mryuanyoung.bookkeeping.data.BillMode
+import com.mryuanyoung.bookkeeping.data.BookkeepingRepository
+import com.mryuanyoung.bookkeeping.data.CategorySummary
+import com.mryuanyoung.bookkeeping.data.ExportBillType
+import com.mryuanyoung.bookkeeping.data.ImportBillType
+import com.mryuanyoung.bookkeeping.ui.ChartEntry
+import com.mryuanyoung.bookkeeping.ui.ChartMode
+import com.mryuanyoung.bookkeeping.ui.StatChartView
 import java.time.LocalDate
+import java.time.YearMonth
 import java.util.Locale
+import kotlin.math.min
 
 class MainActivity : Activity() {
     private lateinit var repository: BookkeepingRepository
     private lateinit var backupFiles: BackupFiles
     private lateinit var content: FrameLayout
     private var editingBill: Bill? = null
-    private var selectedDate: LocalDate = LocalDate.now()
+    private var selectedBillDate: LocalDate = LocalDate.now()
+    private var statsDate: LocalDate = LocalDate.now()
+    private var statsScope: StatsScope = StatsScope.Month
+
+    private enum class StatsScope(val label: String) {
+        Day("日"),
+        Month("月"),
+        Year("年"),
+        All("总")
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,7 +88,7 @@ class MainActivity : Activity() {
     private fun buildShell() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(0xFFF7F8FA.toInt())
+            setBackgroundColor(Bg)
         }
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -57,32 +98,37 @@ class MainActivity : Activity() {
 
     private fun bottomNav(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
-        setBackgroundColor(0xFFFFFFFF.toInt())
-        addView(navButton("记账") { showRecord() })
-        addView(navButton("账单") { showAccount() })
-        addView(navButton("个人") { showProfile() })
+        setPadding(dp(8), dp(6), dp(8), dp(6))
+        setBackgroundColor(Color.WHITE)
+        addView(navButton("记账", "✎") { showRecord() })
+        addView(navButton("账单", "▤") { showAccount() })
+        addView(navButton("个人", "◎") { showProfile() })
     }
 
-    private fun navButton(text: String, action: () -> Unit): Button =
-        Button(this).apply {
-            this.text = text
+    private fun navButton(text: String, icon: String, action: () -> Unit): TextView =
+        TextView(this).apply {
+            this.text = "$icon\n$text"
+            gravity = Gravity.CENTER
+            textSize = 13f
+            setTextColor(Primary)
             setOnClickListener { action() }
             layoutParams = LinearLayout.LayoutParams(0, dp(56), 1f)
         }
 
     private fun showRecord() {
-        val scroll = page()
-        scroll.addView(title("记一笔"))
-        val form = billForm { showRecord() }
-        scroll.addView(form)
-        scroll.addView(sectionTitle("今天"))
-        scroll.addView(billList(repository.findByDay(LocalDate.now()), allowEdit = true))
-        replace(scroll)
+        val page = page()
+        page.addView(title(if (editingBill == null) "记一笔" else "编辑账单"))
+        page.addView(billForm { showRecord() })
+        page.addView(sectionTitle("今天"))
+        page.addView(billList(repository.findByDay(LocalDate.now()), allowEdit = true))
+        replace(page)
     }
 
     private fun billForm(afterSave: () -> Unit): View {
         val bill = editingBill
         val box = verticalBox()
+        selectedBillDate = bill?.date ?: LocalDate.now()
+
         val modeGroup = RadioGroup(this).apply {
             orientation = RadioGroup.HORIZONTAL
             addView(radio("支出", BillMode.Export.name, bill?.mode != BillMode.Import))
@@ -91,34 +137,23 @@ class MainActivity : Activity() {
         val typeSpinner = Spinner(this)
         val amount = input("金额", bill?.amount?.toString().orEmpty(), decimal = true)
         val remark = input("备注", bill?.remark.orEmpty())
-        selectedDate = bill?.date ?: LocalDate.now()
-        val dateButton = Button(this).apply {
-            text = selectedDate.toString()
-            setOnClickListener {
-                DatePickerDialog(
-                    this@MainActivity,
-                    { _, year, month, day ->
-                        selectedDate = LocalDate.of(year, month + 1, day)
-                        text = selectedDate.toString()
-                    },
-                    selectedDate.year,
-                    selectedDate.monthValue - 1,
-                    selectedDate.dayOfMonth
-                ).show()
+        val dateButton = outlineButton(selectedBillDate.toString()) {
+            pickDate(selectedBillDate) { date ->
+                selectedBillDate = date
+                (it as Button).text = date.toString()
             }
         }
 
         fun refreshTypes() {
             val mode = selectedMode(modeGroup)
-            val labels = if (mode == BillMode.Export) {
+            val pairs = if (mode == BillMode.Export) {
                 ExportBillType.entries.map { it.name to it.label }
             } else {
                 ImportBillType.entries.map { it.name to it.label }
             }
-            typeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels.map { it.second })
-            val selected = labels.indexOfFirst { it.first == bill?.type }.takeIf { it >= 0 } ?: 0
-            typeSpinner.setSelection(selected)
-            typeSpinner.tag = labels
+            typeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, pairs.map { it.second })
+            typeSpinner.tag = pairs
+            typeSpinner.setSelection(pairs.indexOfFirst { it.first == bill?.type }.takeIf { it >= 0 } ?: 0)
         }
 
         modeGroup.setOnCheckedChangeListener { _, _ -> refreshTypes() }
@@ -132,107 +167,174 @@ class MainActivity : Activity() {
         box.addView(dateButton)
         box.addView(amount)
         box.addView(remark)
-        box.addView(Button(this).apply {
-            text = if (bill == null) "记账" else "保存修改"
-            setOnClickListener {
-                val value = amount.text.toString().toDoubleOrNull() ?: 0.0
-                if (value <= 0) {
-                    toast("请输入有效金额")
-                    return@setOnClickListener
-                }
-                val mode = selectedMode(modeGroup)
-                val pairs = typeSpinner.tag as List<Pair<String, String>>
-                val target = Bill(
-                    id = bill?.id ?: 0,
-                    mode = mode,
-                    amount = value,
-                    type = pairs[typeSpinner.selectedItemPosition].first,
-                    remark = remark.text.toString(),
-                    date = selectedDate,
-                    unix = bill?.unix ?: System.currentTimeMillis() / 1000
-                )
-                if (bill == null) repository.create(target) else repository.update(target)
-                editingBill = null
-                toast("已保存")
-                afterSave()
+        box.addView(primaryButton(if (bill == null) "记账" else "保存修改") {
+            val value = amount.num()
+            if (value <= 0) {
+                toast("请输入有效金额")
+                return@primaryButton
             }
+            @Suppress("UNCHECKED_CAST")
+            val pairs = typeSpinner.tag as List<Pair<String, String>>
+            val target = Bill(
+                id = bill?.id ?: 0,
+                mode = selectedMode(modeGroup),
+                amount = value,
+                type = pairs[typeSpinner.selectedItemPosition].first,
+                remark = remark.text.toString(),
+                date = selectedBillDate,
+                unix = bill?.unix ?: System.currentTimeMillis() / 1000
+            )
+            if (bill == null) repository.create(target) else repository.update(target)
+            editingBill = null
+            toast("已保存")
+            afterSave()
         })
         if (bill != null) {
-            box.addView(Button(this).apply {
-                text = "取消编辑"
-                setOnClickListener {
-                    editingBill = null
-                    afterSave()
-                }
+            box.addView(outlineButton("取消编辑") {
+                editingBill = null
+                afterSave()
             })
-            box.addView(Button(this).apply {
-                text = "删除"
-                setOnClickListener {
-                    repository.delete(bill.id)
-                    editingBill = null
-                    toast("已删除")
-                    afterSave()
-                }
+            box.addView(dangerButton("删除") {
+                repository.delete(bill.id)
+                editingBill = null
+                toast("已删除")
+                afterSave()
             })
         }
         return card(box)
     }
 
     private fun showAccount() {
-        val scroll = page()
-        scroll.addView(title("账单"))
-        val filterBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            addView(smallButton("日") { showBills("day") })
-            addView(smallButton("月") { showBills("month") })
-            addView(smallButton("年") { showBills("year") })
-            addView(smallButton("总") { showBills("all") })
-        }
-        scroll.addView(filterBar)
-        addBillSummary(scroll, repository.findByMonth(LocalDate.now().year, LocalDate.now().monthValue), "本月概览")
-        scroll.addView(billList(repository.findByMonth(LocalDate.now().year, LocalDate.now().monthValue), allowEdit = true))
-        replace(scroll)
+        renderStats(StatsScope.Month)
     }
 
-    private fun showBills(scope: String) {
-        val now = LocalDate.now()
-        val bills = when (scope) {
-            "day" -> repository.findByDay(now)
-            "month" -> repository.findByMonth(now.year, now.monthValue)
-            "year" -> repository.findByYear(now.year)
-            else -> repository.findAll()
+    private fun renderStats(scope: StatsScope = statsScope) {
+        statsScope = scope
+        val page = page()
+        page.addView(title("账单"))
+        page.addView(scopeTabs(scope))
+        page.addView(periodControls(scope))
+
+        val bills = billsFor(scope)
+        addBillSummary(page, bills, periodTitle(scope))
+        page.addView(categoryCard("支出分类", repository.categorySummary(bills, BillMode.Export), ChartMode.Pie))
+        page.addView(categoryCard("收入分类", repository.categorySummary(bills, BillMode.Import), ChartMode.Pie))
+        if (scope == StatsScope.Year || scope == StatsScope.All) {
+            page.addView(yearTrendCard(if (scope == StatsScope.Year) statsDate.year else LocalDate.now().year))
         }
-        val scroll = page()
-        scroll.addView(title(when (scope) {
-            "day" -> "今日账单"
-            "month" -> "本月账单"
-            "year" -> "本年账单"
-            else -> "总账单"
-        }))
-        addBillSummary(scroll, bills, "统计")
-        scroll.addView(categoryStats(bills))
-        scroll.addView(billList(bills, allowEdit = true))
-        replace(scroll)
+        page.addView(sectionTitle("账单明细"))
+        page.addView(billList(bills, allowEdit = true))
+        replace(page)
     }
 
-    private fun addBillSummary(scroll: LinearLayout, bills: List<Bill>, heading: String) {
+    private fun scopeTabs(selected: StatsScope): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        StatsScope.entries.forEach { scope ->
+            addView(if (scope == selected) primarySmallButton(scope.label) { renderStats(scope) } else smallButton(scope.label) { renderStats(scope) })
+        }
+    }
+
+    private fun periodControls(scope: StatsScope): View = card(LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        if (scope == StatsScope.All) {
+            addView(text("全部账单", weight = 1f))
+            addView(outlineButton("回到本月") {
+                statsDate = LocalDate.now()
+                renderStats(StatsScope.Month)
+            })
+            return@apply
+        }
+        addView(outlineButton("上一${scope.label}") {
+            statsDate = when (scope) {
+                StatsScope.Day -> statsDate.minusDays(1)
+                StatsScope.Month -> statsDate.minusMonths(1)
+                StatsScope.Year -> statsDate.minusYears(1)
+                StatsScope.All -> statsDate
+            }
+            renderStats(scope)
+        })
+        addView(TextView(this@MainActivity).apply {
+            text = periodTitle(scope)
+            gravity = Gravity.CENTER
+            textSize = 16f
+            setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+            setTextColor(TextMain)
+            layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+            setOnClickListener {
+                pickDate(statsDate) {
+                    statsDate = it
+                    renderStats(scope)
+                }
+            }
+        })
+        addView(outlineButton("下一${scope.label}") {
+            statsDate = when (scope) {
+                StatsScope.Day -> statsDate.plusDays(1)
+                StatsScope.Month -> statsDate.plusMonths(1)
+                StatsScope.Year -> statsDate.plusYears(1)
+                StatsScope.All -> statsDate
+            }
+            renderStats(scope)
+        })
+    })
+
+    private fun billsFor(scope: StatsScope): List<Bill> =
+        when (scope) {
+            StatsScope.Day -> repository.findByDay(statsDate)
+            StatsScope.Month -> repository.findByMonth(statsDate.year, statsDate.monthValue)
+            StatsScope.Year -> repository.findByYear(statsDate.year)
+            StatsScope.All -> repository.findAll()
+        }
+
+    private fun periodTitle(scope: StatsScope): String =
+        when (scope) {
+            StatsScope.Day -> "${statsDate.year}-${two(statsDate.monthValue)}-${two(statsDate.dayOfMonth)}"
+            StatsScope.Month -> "${statsDate.year}年${statsDate.monthValue}月"
+            StatsScope.Year -> "${statsDate.year}年"
+            StatsScope.All -> "全部账单"
+        }
+
+    private fun addBillSummary(page: LinearLayout, bills: List<Bill>, heading: String) {
         val summary = repository.summary(bills)
-        scroll.addView(card(verticalBox().apply {
+        page.addView(card(verticalBox().apply {
             addView(sectionTitle(heading))
-            addView(text("收入: ${money(summary.income)}"))
-            addView(text("支出: ${money(summary.expense)}"))
-            addView(text("结余: ${money(summary.balance)}"))
-            addView(text("笔数: ${summary.count}"))
+            addView(metricRow("收入", money(summary.income), Good))
+            addView(metricRow("支出", money(summary.expense), Danger))
+            addView(metricRow("结余", money(summary.balance), if (summary.balance >= 0) Good else Danger))
+            addView(metricRow("笔数", "${summary.count}", TextMain))
         }))
     }
 
-    private fun categoryStats(bills: List<Bill>): View {
+    private fun categoryCard(title: String, stats: List<CategorySummary>, mode: ChartMode): View {
         val box = verticalBox()
-        box.addView(sectionTitle("支出分类"))
-        val stats = repository.categorySummary(bills, BillMode.Export)
-        if (stats.isEmpty()) box.addView(text("暂无支出")) else stats.forEach {
-            box.addView(text("${it.label}: ${money(it.amount)}"))
+        box.addView(sectionTitle(title))
+        val entries = stats.take(8).mapIndexed { index, item ->
+            ChartEntry(item.label, item.amount, Palette[index % Palette.size])
         }
+        box.addView(StatChartView(this).apply {
+            setData(entries, mode)
+            layoutParams = LinearLayout.LayoutParams(-1, dp(260))
+        })
+        if (stats.isEmpty()) {
+            box.addView(text("暂无数据"))
+        } else {
+            stats.forEach { box.addView(metricRow(it.label, money(it.amount), TextMain)) }
+        }
+        return card(box)
+    }
+
+    private fun yearTrendCard(year: Int): View {
+        val box = verticalBox()
+        box.addView(sectionTitle("${year}年月度趋势"))
+        val entries = repository.monthlySummary(year).mapIndexed { index, item ->
+            val (month, summary) = item
+            ChartEntry("${month}月", summary.expense, Palette[index % Palette.size])
+        }
+        box.addView(StatChartView(this).apply {
+            setData(entries, ChartMode.Bar)
+            layoutParams = LinearLayout.LayoutParams(-1, dp(260))
+        })
         return card(box)
     }
 
@@ -242,12 +344,24 @@ class MainActivity : Activity() {
             box.addView(text("暂无记录"))
             return card(box)
         }
+        var currentDate: LocalDate? = null
         bills.forEach { bill ->
+            if (currentDate != bill.date) {
+                currentDate = bill.date
+                box.addView(sectionTitle(bill.date.toString()))
+            }
             val row = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(0, dp(8), 0, dp(8))
-                addView(text("${bill.date}  ${bill.typeLabel}  ${if (bill.mode == BillMode.Export) "-" else "+"}${money(bill.amount)}"))
-                if (bill.remark.isNotBlank()) addView(text(bill.remark, small = true))
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(10), 0, dp(10))
+                addView(verticalBox().apply {
+                    addView(text(bill.typeLabel))
+                    if (bill.remark.isNotBlank()) addView(text(bill.remark, small = true))
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(text("${if (bill.mode == BillMode.Export) "-" else "+"}${money(bill.amount)}").apply {
+                    setTextColor(if (bill.mode == BillMode.Export) Danger else Good)
+                    gravity = Gravity.END
+                })
                 if (allowEdit) setOnClickListener {
                     editingBill = bill
                     showRecord()
@@ -259,120 +373,66 @@ class MainActivity : Activity() {
     }
 
     private fun showProfile() {
-        val scroll = page()
-        scroll.addView(title("个人"))
-        scroll.addView(card(verticalBox().apply {
+        val page = page()
+        page.addView(title("个人"))
+        page.addView(card(verticalBox().apply {
             addView(sectionTitle("数据"))
-            addView(Button(this@MainActivity).apply {
-                text = "导出 JSON"
-                setOnClickListener {
-                    val file = backupFiles.exportToFile(repository.exportJson())
-                    toast("已导出: ${file.absolutePath}")
-                }
+            addView(primaryButton("导出 JSON") {
+                val file = backupFiles.exportToFile(repository.exportJson())
+                toast("已导出: ${file.absolutePath}")
             })
-            addView(Button(this@MainActivity).apply {
-                text = "导入 JSON"
-                setOnClickListener {
-                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                        addCategory(Intent.CATEGORY_OPENABLE)
-                        type = "application/json"
-                    }, REQ_IMPORT_JSON)
-                }
-            })
-            addView(Button(this@MainActivity).apply {
-                text = "WebDAV 设置/同步"
-                setOnClickListener { showWebDavDialog() }
+            addView(outlineButton("导入 JSON") {
+                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "application/json"
+                }, REQ_IMPORT_JSON)
             })
         }))
-        scroll.addView(card(verticalBox().apply {
+        page.addView(card(verticalBox().apply {
             addView(sectionTitle("工具"))
-            addView(Button(this@MainActivity).apply {
-                text = "工资计算"
-                setOnClickListener { showSalaryDialog() }
-            })
-            addView(Button(this@MainActivity).apply {
-                text = "成都公积金计算"
-                setOnClickListener { showHousingFundDialog() }
-            })
-            addView(Button(this@MainActivity).apply {
-                text = "房产计算"
-                setOnClickListener { showEstateDialog() }
-            })
+            addView(outlineButton("工资计算") { showSalaryDialog() })
+            addView(outlineButton("成都公积金计算") { showHousingFundDialog() })
+            addView(outlineButton("房产计算") { showEstateDialog() })
         }))
-        replace(scroll)
-    }
-
-    private fun showWebDavDialog() {
-        val prefs = getSharedPreferences("webdav", MODE_PRIVATE)
-        val box = verticalBox()
-        val baseUrl = input("WebDAV 地址", prefs.getString("baseUrl", "").orEmpty())
-        val username = input("用户名", prefs.getString("username", "").orEmpty())
-        val password = input("密码", prefs.getString("password", "").orEmpty())
-        val filename = input("下载文件名", "")
-        box.addView(baseUrl)
-        box.addView(username)
-        box.addView(password)
-        box.addView(filename)
-        AlertDialog.Builder(this)
-            .setTitle("WebDAV")
-            .setView(box)
-            .setPositiveButton("备份") { _, _ ->
-                prefs.edit()
-                    .putString("baseUrl", baseUrl.text.toString().trimEnd('/'))
-                    .putString("username", username.text.toString())
-                    .putString("password", password.text.toString())
-                    .apply()
-                runNetwork("备份成功") {
-                    WebDavClient(baseUrl.text.toString().trimEnd('/'), username.text.toString(), password.text.toString())
-                        .uploadBackup(repository.exportJson())
-                }
-            }
-            .setNegativeButton("下载导入") { _, _ ->
-                runNetwork("导入成功") {
-                    val json = WebDavClient(baseUrl.text.toString().trimEnd('/'), username.text.toString(), password.text.toString())
-                        .download(filename.text.toString())
-                    repository.importJson(json)
-                }
-            }
-            .setNeutralButton("取消", null)
-            .show()
+        replace(page)
     }
 
     private fun showSalaryDialog() {
         val box = verticalBox()
         val base = input("月基础工资", "0", true)
         val subsidy = input("每月补贴", "0", true)
-        val yearAward = input("年终奖", "0", true)
+        val bonus = input("年终奖金额或月薪倍数", "0", true)
+        val bonusAsMonths = CheckBox(this).apply { text = "年终奖按月薪倍数计算" }
         val extraAward = input("额外奖金", "0", true)
         val fundBase = input("社保/公积金基数", "0", true)
         val fundRate = input("公积金比例(%)", "12", true)
         val fundLimit = input("公积金上限基数", "3420", true)
-        listOf(base, subsidy, yearAward, extraAward, fundBase, fundRate, fundLimit).forEach { box.addView(it) }
+        val specialDeduction = input("每月专项扣除", "1500", true)
+        listOf(base, subsidy, bonus, bonusAsMonths, extraAward, fundBase, fundRate, fundLimit, specialDeduction).forEach { box.addView(it) }
         AlertDialog.Builder(this)
             .setTitle("工资计算")
-            .setView(box)
+            .setView(wrapDialogContent(box))
             .setPositiveButton("计算") { _, _ ->
+                val yearAward = if (bonusAsMonths.isChecked) base.num() * bonus.num() else bonus.num()
                 val result = SalaryCalculator.calculate(
                     SalaryInput(
                         base = base.num(),
                         monthlySubsidy = subsidy.num(),
-                        yearAward = yearAward.num(),
+                        yearAward = yearAward,
                         extraAward = extraAward.num(),
                         insuranceBase = fundBase.num(),
                         fundRatePercent = fundRate.num(),
-                        fundLimitBase = fundLimit.num()
+                        fundLimitBase = fundLimit.num(),
+                        specialDeduction = specialDeduction.num()
                     )
                 )
-                showResult(
-                    "工资计算结果",
-                    """
+                showResult("工资计算结果", """
                     税前年收入: ${money(result.beforeTaxYearSalary)}
                     每月五险: ${money(result.fiveInsurancesPerMonth)}
                     每月公积金: ${money(result.fundPerMonth)}
                     年个税: ${money(result.totalTax)}
                     税后年收入: ${money(result.afterTaxYearSalary)}
-                    """.trimIndent()
-                )
+                """.trimIndent())
             }
             .setNegativeButton("取消", null)
             .show()
@@ -382,66 +442,114 @@ class MainActivity : Activity() {
         val box = verticalBox()
         val rate = input("存贷系数", "0.9", true)
         val deposit = input("每月缴存", "0", true)
-        val months = input("缴存月数", "12", true)
+        val start = input("起始月份 YYYY-MM", YearMonth.now().minusMonths(11).toString())
+        val end = input("结束月份 YYYY-MM", YearMonth.now().toString())
+        val depositDetail = input("逐月缴存明细，逗号分隔(可选)", "")
+        val withdrawDetail = input("逐月提取明细，逗号分隔(可选)", "")
         val couple = CheckBox(this).apply { text = "夫妻共同贷款" }
         val first = CheckBox(this).apply {
             text = "首套房"
             isChecked = true
         }
-        listOf(rate, deposit, months, couple, first).forEach { box.addView(it) }
+        listOf(rate, deposit, start, end, depositDetail, withdrawDetail, couple, first).forEach { box.addView(it) }
         AlertDialog.Builder(this)
             .setTitle("成都公积金计算")
-            .setView(box)
+            .setView(wrapDialogContent(box))
             .setPositiveButton("计算") { _, _ ->
-                val result = HousingFundCalculator.calculateChengdu(couple.isChecked, first.isChecked, rate.num(), deposit.num(), months.num().toInt())
-                showResult(
-                    "公积金计算结果",
-                    "理论上限: ${one(result.theoreticalLimit)} 万\n城市上限: ${one(result.cityLimit)} 万\n可贷上限: ${one(result.finalLimit)} 万"
-                )
+                val months = monthDiff(start.text.toString(), end.text.toString()).coerceAtLeast(1)
+                val detailed = calculateHousingFundDetail(rate.num(), depositDetail.text.toString(), withdrawDetail.text.toString())
+                val result = if (detailed != null) {
+                    val cityLimit = if (couple.isChecked) {
+                        if (first.isChecked) 80.0 else 70.0
+                    } else {
+                        40.0
+                    }
+                    Triple(detailed / 10_000, cityLimit, min(detailed / 10_000, cityLimit))
+                } else {
+                    val simple = HousingFundCalculator.calculateChengdu(couple.isChecked, first.isChecked, rate.num(), deposit.num(), months)
+                    Triple(simple.theoreticalLimit, simple.cityLimit, simple.finalLimit)
+                }
+                showResult("公积金计算结果", "理论上限: ${one(result.first)} 万\n城市上限: ${one(result.second)} 万\n可贷上限: ${one(result.third)} 万")
             }
             .setNegativeButton("取消", null)
             .show()
+    }
+
+    private fun calculateHousingFundDetail(rate: Double, depositsText: String, withdrawText: String): Double? {
+        val deposits = parseNumberList(depositsText)
+        val withdraws = parseNumberList(withdrawText)
+        if (deposits.isEmpty() || withdraws.isEmpty() || deposits.size != withdraws.size) return null
+        var total = 0.0
+        var toSubtract = 0.0
+        var month = 1
+        for (i in deposits.indices.reversed()) {
+            var current = deposits[i]
+            toSubtract += withdraws[i]
+            if (toSubtract > current) {
+                toSubtract -= current
+                month++
+                continue
+            }
+            current -= toSubtract
+            toSubtract = 0.0
+            total += rate * current * month
+            month++
+        }
+        return if (toSubtract == 0.0) total else null
     }
 
     private fun showEstateDialog() {
         val box = verticalBox()
         val totalPrice = input("房屋总价", "0", true)
         val downRate = input("首付比例(如 0.3)", "0.3", true)
-        val loanAmount = input("贷款金额", "0", true)
-        val annualRate = input("贷款年利率(如 0.041)", "0.041", true)
-        val duration = input("贷款年限", "30", true)
+        val commercialAmount = input("商业贷款金额", "0", true)
+        val commercialRate = input("商业贷款年利率(如 0.041)", "0.041", true)
+        val commercialYears = input("商业贷款年限", "30", true)
+        val fundAmount = input("公积金贷款金额", "0", true)
+        val fundRate = input("公积金贷款年利率(如 0.031)", "0.031", true)
+        val fundYears = input("公积金贷款年限", "30", true)
         val expectedRate = input("预期理财年化(如 0.04)", "0.04", true)
         val sellYears = input("几年后卖出", "5", true)
         val rent = input("每月房租", "0", true)
-        listOf(totalPrice, downRate, loanAmount, annualRate, duration, expectedRate, sellYears, rent).forEach { box.addView(it) }
+        val paymentType = RadioGroup(this).apply {
+            orientation = RadioGroup.HORIZONTAL
+            addView(radio("等额本息", PaymentType.EAPI.name, true))
+            addView(radio("等额本金", PaymentType.EAP.name, false))
+        }
+        listOf(totalPrice, downRate, commercialAmount, commercialRate, commercialYears, fundAmount, fundRate, fundYears, expectedRate, sellYears, rent, paymentType).forEach { box.addView(it) }
         AlertDialog.Builder(this)
             .setTitle("房产计算")
-            .setView(box)
+            .setView(wrapDialogContent(box))
             .setPositiveButton("计算") { _, _ ->
+                val loans = mutableListOf<Loan>()
+                if (commercialAmount.num() > 0) loans.add(Loan(commercialAmount.num(), commercialRate.num(), commercialYears.num().toInt().coerceAtLeast(1)))
+                if (fundAmount.num() > 0) loans.add(Loan(fundAmount.num(), fundRate.num(), fundYears.num().toInt().coerceAtLeast(1)))
+                if (loans.isEmpty()) {
+                    toast("请输入至少一项贷款")
+                    return@setPositiveButton
+                }
                 val result = EstateCalculator.calculate(
                     EstateInput(
                         totalPrice = totalPrice.num(),
                         downPaymentRate = downRate.num(),
-                        loans = listOf(Loan(loanAmount.num(), annualRate.num(), duration.num().toInt())),
-                        paymentType = PaymentType.EAPI,
+                        loans = loans,
+                        paymentType = PaymentType.valueOf(selectedRadioTag(paymentType, PaymentType.EAPI.name)),
                         expectedRate = expectedRate.num(),
-                        sellingYears = sellYears.num().toInt(),
+                        sellingYears = sellYears.num().toInt().coerceAtLeast(1),
                         rent = rent.num()
                     )
                 )
-                showResult(
-                    "房产计算结果",
-                    """
+                showResult("房产计算结果", """
                     首月月供: ${money(result.firstMonthPayment)}
                     持有期还款: ${money(result.accTotal)}
                     持有期利息: ${money(result.accInterest)}
                     已还本金: ${money(result.accPrincipal)}
                     剩余贷款: ${money(result.remainingLoan)}
+                    租金累计: ${money(result.expectedInterest.totalRent)}
                     机会成本本金: ${money(result.expectedInterest.principal)}
                     机会成本收益: ${money(result.expectedInterest.diff)}
                     保本卖价: ${money(result.expectedSellingPrice)}
-                    """.trimIndent()
-                )
+                """.trimIndent())
             }
             .setNegativeButton("取消", null)
             .show()
@@ -450,61 +558,71 @@ class MainActivity : Activity() {
     private fun replace(view: View) {
         content.removeAllViews()
         if (view is LinearLayout) {
-            val scroll = ScrollView(this)
-            scroll.addView(view)
-            content.addView(scroll)
+            content.addView(ScrollView(this).apply { addView(view) })
         } else {
             content.addView(view)
         }
     }
 
-    private fun page(): LinearLayout {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(16), dp(16), dp(16))
-        }
+    private fun page(): LinearLayout = verticalBox().apply {
+        setPadding(dp(16), dp(16), dp(16), dp(16))
     }
 
-    private fun card(child: View): View = LinearLayout(this).apply {
+    private fun card(child: View): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(14), dp(12), dp(14), dp(12))
-        setBackgroundColor(0xFFFFFFFF.toInt())
+        background = rounded(Color.WHITE, dp(8).toFloat())
         addView(child)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply {
             setMargins(0, dp(8), 0, dp(8))
         }
+        elevation = dp(1).toFloat()
     }
 
     private fun verticalBox(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
     }
 
-    private fun title(text: String): TextView = TextView(this).apply {
-        this.text = text
+    private fun title(value: String): TextView = TextView(this).apply {
+        text = value
         textSize = 28f
-        setTextColor(0xFF17201D.toInt())
+        setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+        setTextColor(TextMain)
         setPadding(0, dp(8), 0, dp(12))
     }
 
-    private fun sectionTitle(text: String): TextView = TextView(this).apply {
-        this.text = text
+    private fun sectionTitle(value: String): TextView = TextView(this).apply {
+        text = value
         textSize = 18f
-        setTextColor(0xFF1E6B5C.toInt())
+        setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+        setTextColor(Primary)
         setPadding(0, dp(6), 0, dp(6))
     }
 
-    private fun label(text: String): TextView = TextView(this).apply {
-        this.text = text
+    private fun label(value: String): TextView = TextView(this).apply {
+        text = value
         textSize = 14f
-        setTextColor(0xFF5C6662.toInt())
+        setTextColor(TextMuted)
         setPadding(0, dp(8), 0, dp(2))
     }
 
-    private fun text(text: String, small: Boolean = false): TextView = TextView(this).apply {
-        this.text = text
+    private fun text(value: String, small: Boolean = false, weight: Float? = null): TextView = TextView(this).apply {
+        text = value
         textSize = if (small) 13f else 16f
-        setTextColor(if (small) 0xFF66706C.toInt() else 0xFF24302C.toInt())
+        setTextColor(if (small) TextMuted else TextMain)
         setPadding(0, dp(3), 0, dp(3))
+        if (weight != null) layoutParams = LinearLayout.LayoutParams(0, -2, weight)
+    }
+
+    private fun metricRow(name: String, value: String, color: Int): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, dp(4), 0, dp(4))
+        addView(text(name, weight = 1f))
+        addView(text(value).apply {
+            setTextColor(color)
+            gravity = Gravity.END
+        })
     }
 
     private fun input(hint: String, value: String = "", decimal: Boolean = false): EditText =
@@ -512,7 +630,8 @@ class MainActivity : Activity() {
             this.hint = hint
             setText(value)
             setSingleLine(true)
-            if (decimal) inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            textSize = 15f
+            if (decimal) inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
         }
 
     private fun radio(label: String, value: String, checked: Boolean): RadioButton =
@@ -523,35 +642,109 @@ class MainActivity : Activity() {
             isChecked = checked
         }
 
-    private fun smallButton(label: String, action: () -> Unit): Button =
+    private fun primaryButton(label: String, action: (View) -> Unit): Button =
         Button(this).apply {
             text = label
-            setOnClickListener { action() }
-            layoutParams = LinearLayout.LayoutParams(0, dp(48), 1f)
+            setTextColor(Color.WHITE)
+            background = rounded(Primary, dp(6).toFloat())
+            setOnClickListener(action)
+            layoutParams = buttonParams()
         }
 
-    private fun selectedMode(group: RadioGroup): BillMode {
+    private fun outlineButton(label: String, action: (View) -> Unit): Button =
+        Button(this).apply {
+            text = label
+            setTextColor(Primary)
+            background = roundedStroke(Color.TRANSPARENT, Primary)
+            setOnClickListener(action)
+            layoutParams = buttonParams()
+        }
+
+    private fun dangerButton(label: String, action: (View) -> Unit): Button =
+        Button(this).apply {
+            text = label
+            setTextColor(Danger)
+            background = roundedStroke(Color.TRANSPARENT, Danger)
+            setOnClickListener(action)
+            layoutParams = buttonParams()
+        }
+
+    private fun smallButton(label: String, action: () -> Unit): Button =
+        outlineButton(label) { action() }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(dp(3), dp(4), dp(3), dp(4)) }
+        }
+
+    private fun primarySmallButton(label: String, action: () -> Unit): Button =
+        primaryButton(label) { action() }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(dp(3), dp(4), dp(3), dp(4)) }
+        }
+
+    private fun buttonParams(): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(-1, dp(46)).apply { setMargins(0, dp(6), 0, dp(6)) }
+
+    private fun rounded(color: Int, radius: Float): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = radius
+        }
+
+    private fun roundedStroke(color: Int, stroke: Int): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(6).toFloat()
+            setStroke(dp(1), stroke)
+        }
+
+    private fun wrapDialogContent(view: View): ScrollView =
+        ScrollView(this).apply {
+            addView(view, ViewGroup.LayoutParams(-1, -2))
+            setPadding(dp(8), 0, dp(8), 0)
+        }
+
+    private fun selectedMode(group: RadioGroup): BillMode =
+        BillMode.valueOf(selectedRadioTag(group, BillMode.Export.name))
+
+    private fun selectedRadioTag(group: RadioGroup, fallback: String): String {
         val radio = group.findViewById<RadioButton>(group.checkedRadioButtonId)
-        return BillMode.valueOf(radio?.tag?.toString() ?: BillMode.Export.name)
+        return radio?.tag?.toString() ?: fallback
     }
 
-    private fun runNetwork(success: String, task: () -> Unit) {
-        Thread {
-            runCatching { task() }
-                .onSuccess { runOnUiThread { toast(success) } }
-                .onFailure { runOnUiThread { toast(it.message ?: "操作失败") } }
-        }.start()
+    private fun pickDate(initial: LocalDate, onPicked: (LocalDate) -> Unit) {
+        DatePickerDialog(
+            this,
+            { _, year, month, day -> onPicked(LocalDate.of(year, month + 1, day)) },
+            initial.year,
+            initial.monthValue - 1,
+            initial.dayOfMonth
+        ).show()
     }
 
     private fun showResult(title: String, message: String) {
-        AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("确定", null).show()
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("确定", null)
+            .show()
     }
 
-    private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+    private fun parseNumberList(value: String): List<Double> =
+        value.split(',', '，', '\n', ';', '；')
+            .mapNotNull { it.trim().takeIf { s -> s.isNotBlank() }?.toDoubleOrNull() }
+
+    private fun monthDiff(start: String, end: String): Int =
+        runCatching {
+            val s = YearMonth.parse(start.trim())
+            val e = YearMonth.parse(end.trim())
+            (e.year - s.year) * 12 + e.monthValue - s.monthValue + 1
+        }.getOrDefault(1)
+
+    private fun toast(value: String) = Toast.makeText(this, value, Toast.LENGTH_SHORT).show()
 
     private fun money(value: Double): String = String.format(Locale.CHINA, "¥%.2f", value)
 
     private fun one(value: Double): String = String.format(Locale.CHINA, "%.1f", value)
+
+    private fun two(value: Int): String = value.toString().padStart(2, '0')
 
     private fun EditText.num(): Double = text.toString().toDoubleOrNull() ?: 0.0
 
@@ -559,5 +752,21 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQ_IMPORT_JSON = 1001
+        private val Bg = Color.rgb(247, 248, 250)
+        private val Primary = Color.rgb(30, 107, 92)
+        private val TextMain = Color.rgb(36, 48, 44)
+        private val TextMuted = Color.rgb(102, 112, 108)
+        private val Good = Color.rgb(28, 128, 95)
+        private val Danger = Color.rgb(196, 72, 72)
+        private val Palette = listOf(
+            Color.rgb(30, 107, 92),
+            Color.rgb(46, 125, 170),
+            Color.rgb(224, 142, 58),
+            Color.rgb(173, 89, 118),
+            Color.rgb(95, 113, 188),
+            Color.rgb(100, 135, 61),
+            Color.rgb(176, 93, 64),
+            Color.rgb(84, 128, 132)
+        )
     }
 }

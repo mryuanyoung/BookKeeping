@@ -9,12 +9,11 @@ This directory contains a native Android rewrite of the original React/Vite book
 - View day, month, year, and total summaries.
 - Show category totals for simple chart-style statistics.
 - Import and export the same JSON shape used by the web app: `importBill` and `exportBill`.
-- Configure WebDAV-compatible server credentials and upload/download backup JSON.
 - Salary, Chengdu housing fund, and estate loan calculators.
 
 ## Architecture
 
-- `data/`: domain models, SQLite persistence, JSON backup, WebDAV client.
+- `data/`: domain models, SQLite persistence, JSON backup.
 - `calc/`: calculator business logic ported from the web project.
 - `MainActivity.kt`: native Android View UI and navigation.
 
