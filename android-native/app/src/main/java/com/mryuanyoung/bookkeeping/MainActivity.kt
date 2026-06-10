@@ -239,13 +239,13 @@ class MainActivity : Activity() {
         gravity = Gravity.CENTER_VERTICAL
         if (scope == StatsScope.All) {
             addView(text("全部账单", weight = 1f))
-            addView(outlineButton("回到本月") {
+            addView(periodButton("本月") {
                 statsDate = LocalDate.now()
                 renderStats(StatsScope.Month)
             })
             return@apply
         }
-        addView(outlineButton("上一${scope.label}") {
+        addView(periodButton("‹") {
             statsDate = when (scope) {
                 StatsScope.Day -> statsDate.minusDays(1)
                 StatsScope.Month -> statsDate.minusMonths(1)
@@ -268,7 +268,11 @@ class MainActivity : Activity() {
                 }
             }
         })
-        addView(outlineButton("下一${scope.label}") {
+        addView(periodButton(currentPeriodLabel(scope)) {
+            statsDate = LocalDate.now()
+            renderStats(scope)
+        })
+        addView(periodButton("›") {
             statsDate = when (scope) {
                 StatsScope.Day -> statsDate.plusDays(1)
                 StatsScope.Month -> statsDate.plusMonths(1)
@@ -564,6 +568,14 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun currentPeriodLabel(scope: StatsScope): String =
+        when (scope) {
+            StatsScope.Day -> "今天"
+            StatsScope.Month -> "本月"
+            StatsScope.Year -> "今年"
+            StatsScope.All -> "本期"
+        }
+
     private fun page(): LinearLayout = verticalBox().apply {
         setPadding(dp(16), dp(16), dp(16), dp(16))
     }
@@ -677,6 +689,16 @@ class MainActivity : Activity() {
     private fun primarySmallButton(label: String, action: () -> Unit): Button =
         primaryButton(label) { action() }.apply {
             layoutParams = LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(dp(3), dp(4), dp(3), dp(4)) }
+        }
+
+    private fun periodButton(label: String, action: () -> Unit): Button =
+        outlineButton(label) { action() }.apply {
+            minWidth = 0
+            minimumWidth = 0
+            setPadding(dp(8), 0, dp(8), 0)
+            layoutParams = LinearLayout.LayoutParams(if (label.length <= 1) dp(44) else dp(62), dp(40)).apply {
+                setMargins(dp(3), 0, dp(3), 0)
+            }
         }
 
     private fun buttonParams(): LinearLayout.LayoutParams =
