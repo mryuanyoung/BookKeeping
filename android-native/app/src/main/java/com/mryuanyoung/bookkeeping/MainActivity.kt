@@ -50,16 +50,24 @@ class MainActivity : Activity() {
     private lateinit var repository: BookkeepingRepository
     private lateinit var backupFiles: BackupFiles
     private lateinit var content: FrameLayout
+    private lateinit var navContainer: LinearLayout
     private var editingBill: Bill? = null
     private var selectedBillDate: LocalDate = LocalDate.now()
     private var statsDate: LocalDate = LocalDate.now()
     private var statsScope: StatsScope = StatsScope.Month
+    private var currentTab: MainTab = MainTab.Record
 
     private enum class StatsScope(val label: String) {
         Day("日"),
         Month("月"),
         Year("年"),
         All("总")
+    }
+
+    private enum class MainTab {
+        Record,
+        Account,
+        Profile
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,30 +100,43 @@ class MainActivity : Activity() {
         }
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(bottomNav())
+        navContainer = bottomNav()
+        root.addView(navContainer)
         setContentView(root)
+        renderBottomNav()
     }
 
     private fun bottomNav(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         setPadding(dp(8), dp(6), dp(8), dp(6))
         setBackgroundColor(Color.WHITE)
-        addView(navButton("记账", "✎") { showRecord() })
-        addView(navButton("账单", "▤") { showAccount() })
-        addView(navButton("个人", "◎") { showProfile() })
     }
 
-    private fun navButton(text: String, icon: String, action: () -> Unit): TextView =
+    private fun renderBottomNav() {
+        navContainer.removeAllViews()
+        navContainer.addView(navButton("记账", "✎", MainTab.Record) { showRecord() })
+        navContainer.addView(navButton("账单", "▤", MainTab.Account) { showAccount() })
+        navContainer.addView(navButton("个人", "◎", MainTab.Profile) { showProfile() })
+    }
+
+    private fun navButton(text: String, icon: String, tab: MainTab, action: () -> Unit): TextView =
         TextView(this).apply {
             this.text = "$icon\n$text"
             gravity = Gravity.CENTER
             textSize = 13f
-            setTextColor(Primary)
+            val selected = tab == currentTab
+            setTextColor(if (selected) Color.WHITE else Primary)
+            setTypeface(Typeface.DEFAULT, if (selected) Typeface.BOLD else Typeface.NORMAL)
+            background = if (selected) rounded(Primary, dp(10).toFloat()) else rounded(Color.TRANSPARENT, dp(10).toFloat())
             setOnClickListener { action() }
-            layoutParams = LinearLayout.LayoutParams(0, dp(56), 1f)
+            layoutParams = LinearLayout.LayoutParams(0, dp(56), 1f).apply {
+                setMargins(dp(4), 0, dp(4), 0)
+            }
         }
 
     private fun showRecord() {
+        currentTab = MainTab.Record
+        renderBottomNav()
         val page = page()
         page.addView(title(if (editingBill == null) "记一笔" else "编辑账单"))
         page.addView(billForm { showRecord() })
@@ -209,6 +230,8 @@ class MainActivity : Activity() {
     }
 
     private fun renderStats(scope: StatsScope = statsScope) {
+        currentTab = MainTab.Account
+        renderBottomNav()
         statsScope = scope
         val page = page()
         page.addView(title("账单"))
@@ -217,11 +240,10 @@ class MainActivity : Activity() {
 
         val bills = billsFor(scope)
         addBillSummary(page, bills, periodTitle(scope))
-        page.addView(categoryCard("支出分类", repository.categorySummary(bills, BillMode.Export), ChartMode.Pie))
-        page.addView(categoryCard("收入分类", repository.categorySummary(bills, BillMode.Import), ChartMode.Pie))
-        if (scope == StatsScope.Year || scope == StatsScope.All) {
-            page.addView(yearTrendCard(if (scope == StatsScope.Year) statsDate.year else LocalDate.now().year))
-        }
+        page.addView(trendCard("支出统计", scope, BillMode.Export))
+        page.addView(trendCard("收入统计", scope, BillMode.Import))
+        page.addView(categoryCard("支出", repository.categorySummary(bills, BillMode.Export), ChartMode.Pie))
+        page.addView(categoryCard("收入", repository.categorySummary(bills, BillMode.Import), ChartMode.Pie))
         page.addView(sectionTitle("账单明细"))
         page.addView(billList(bills, allowEdit = true))
         replace(page)
@@ -328,18 +350,34 @@ class MainActivity : Activity() {
         return card(box)
     }
 
-    private fun yearTrendCard(year: Int): View {
+    private fun trendCard(title: String, scope: StatsScope, mode: BillMode): View {
         val box = verticalBox()
-        box.addView(sectionTitle("${year}年月度趋势"))
-        val entries = repository.monthlySummary(year).mapIndexed { index, item ->
-            val (month, summary) = item
-            ChartEntry("${month}月", summary.expense, Palette[index % Palette.size])
-        }
+        box.addView(sectionTitle(title))
+        val entries = trendEntries(scope, mode)
         box.addView(StatChartView(this).apply {
             setData(entries, ChartMode.Bar)
             layoutParams = LinearLayout.LayoutParams(-1, dp(260))
         })
         return card(box)
+    }
+
+    private fun trendEntries(scope: StatsScope, mode: BillMode): List<ChartEntry> {
+        val summaries = when (scope) {
+            StatsScope.Day -> listOf(statsDate.dayOfMonth to repository.summary(repository.findByDay(statsDate)))
+            StatsScope.Month -> repository.dailySummary(statsDate.year, statsDate.monthValue)
+            StatsScope.Year -> repository.monthlySummary(statsDate.year)
+            StatsScope.All -> repository.yearlySummary()
+        }
+        return summaries.mapIndexed { index, item ->
+            val (period, summary) = item
+            val label = when (scope) {
+                StatsScope.Day -> "${period}日"
+                StatsScope.Month -> "${period}日"
+                StatsScope.Year -> "${period}月"
+                StatsScope.All -> "${period}年"
+            }
+            ChartEntry(label, if (mode == BillMode.Export) summary.expense else summary.income, Palette[index % Palette.size])
+        }
     }
 
     private fun billList(bills: List<Bill>, allowEdit: Boolean): View {
@@ -377,6 +415,8 @@ class MainActivity : Activity() {
     }
 
     private fun showProfile() {
+        currentTab = MainTab.Profile
+        renderBottomNav()
         val page = page()
         page.addView(title("个人"))
         page.addView(card(verticalBox().apply {

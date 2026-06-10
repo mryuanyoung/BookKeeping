@@ -70,6 +70,14 @@ class BookkeepingRepository(context: Context) :
     fun monthlySummary(year: Int): List<Pair<Int, BillSummary>> =
         (1..12).map { month -> month to summary(findByMonth(year, month)) }
 
+    fun dailySummary(year: Int, month: Int): List<Pair<Int, BillSummary>> {
+        val days = java.time.YearMonth.of(year, month).lengthOfMonth()
+        return (1..days).map { day -> day to summary(findByDay(LocalDate.of(year, month, day))) }
+    }
+
+    fun yearlySummary(): List<Pair<Int, BillSummary>> =
+        availableYears().sorted().map { year -> year to summary(findByYear(year)) }
+
     fun summary(bills: List<Bill>): BillSummary {
         val income = bills.filter { it.mode == BillMode.Import }.sumOf { it.amount }
         val expense = bills.filter { it.mode == BillMode.Export }.sumOf { it.amount }
