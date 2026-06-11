@@ -36,6 +36,7 @@ import com.mryuanyoung.bookkeeping.calc.SalaryInput
 import com.mryuanyoung.bookkeeping.data.BackupFiles
 import com.mryuanyoung.bookkeeping.data.Bill
 import com.mryuanyoung.bookkeeping.data.BillMode
+import com.mryuanyoung.bookkeeping.data.BillSummary
 import com.mryuanyoung.bookkeeping.data.BookkeepingRepository
 import com.mryuanyoung.bookkeeping.data.CategorySummary
 import com.mryuanyoung.bookkeeping.data.ExportBillType
@@ -71,6 +72,14 @@ class MainActivity : Activity() {
         Account,
         Profile
     }
+
+    private data class StatsReport(
+        val detailBills: List<Bill>,
+        val summary: BillSummary,
+        val expenseCategories: List<CategorySummary>,
+        val incomeCategories: List<CategorySummary>,
+        val detailLimited: Boolean
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -256,14 +265,14 @@ class MainActivity : Activity() {
         page.addView(scopeTabs(scope))
         page.addView(periodControls(scope))
 
-        val bills = billsFor(scope)
-        addBillSummary(page, bills, periodTitle(scope))
+        val report = statsReport(scope)
+        addBillSummary(page, report.summary, periodTitle(scope))
         page.addView(trendCard("支出统计", scope, BillMode.Export))
         page.addView(trendCard("收入统计", scope, BillMode.Import))
-        page.addView(categoryCard("支出", repository.categorySummary(bills, BillMode.Export), ChartMode.Pie))
-        page.addView(categoryCard("收入", repository.categorySummary(bills, BillMode.Import), ChartMode.Pie))
-        page.addView(sectionTitle("账单明细"))
-        page.addView(billList(bills, allowEdit = true))
+        page.addView(categoryCard("支出", report.expenseCategories, ChartMode.Pie))
+        page.addView(categoryCard("收入", report.incomeCategories, ChartMode.Pie))
+        page.addView(sectionTitle(if (report.detailLimited) "账单明细(最近300笔)" else "账单明细"))
+        page.addView(billList(report.detailBills, allowEdit = true))
         replace(page)
     }
 
@@ -331,6 +340,41 @@ class MainActivity : Activity() {
             StatsScope.All -> repository.findAll()
         }
 
+    private fun statsReport(scope: StatsScope): StatsReport =
+        when (scope) {
+            StatsScope.Day -> StatsReport(
+                detailBills = repository.findByDay(statsDate),
+                summary = repository.daySummary(statsDate),
+                expenseCategories = repository.categorySummaryByDay(statsDate, BillMode.Export),
+                incomeCategories = repository.categorySummaryByDay(statsDate, BillMode.Import),
+                detailLimited = false
+            )
+
+            StatsScope.Month -> StatsReport(
+                detailBills = repository.findByMonth(statsDate.year, statsDate.monthValue),
+                summary = repository.monthSummary(statsDate.year, statsDate.monthValue),
+                expenseCategories = repository.categorySummaryByMonth(statsDate.year, statsDate.monthValue, BillMode.Export),
+                incomeCategories = repository.categorySummaryByMonth(statsDate.year, statsDate.monthValue, BillMode.Import),
+                detailLimited = false
+            )
+
+            StatsScope.Year -> StatsReport(
+                detailBills = repository.findRecentByYear(statsDate.year, DETAIL_LIMIT),
+                summary = repository.yearSummary(statsDate.year),
+                expenseCategories = repository.categorySummaryByYear(statsDate.year, BillMode.Export),
+                incomeCategories = repository.categorySummaryByYear(statsDate.year, BillMode.Import),
+                detailLimited = true
+            )
+
+            StatsScope.All -> StatsReport(
+                detailBills = repository.findRecent(DETAIL_LIMIT),
+                summary = repository.allSummary(),
+                expenseCategories = repository.categorySummaryAll(BillMode.Export),
+                incomeCategories = repository.categorySummaryAll(BillMode.Import),
+                detailLimited = true
+            )
+        }
+
     private fun periodTitle(scope: StatsScope): String =
         when (scope) {
             StatsScope.Day -> "${statsDate.year}-${two(statsDate.monthValue)}-${two(statsDate.dayOfMonth)}"
@@ -339,8 +383,7 @@ class MainActivity : Activity() {
             StatsScope.All -> "全部账单"
         }
 
-    private fun addBillSummary(page: LinearLayout, bills: List<Bill>, heading: String) {
-        val summary = repository.summary(bills)
+    private fun addBillSummary(page: LinearLayout, summary: BillSummary, heading: String) {
         page.addView(card(verticalBox().apply {
             addView(sectionTitle(heading))
             addView(metricRow("收入", money(summary.income), Good))
@@ -381,7 +424,7 @@ class MainActivity : Activity() {
 
     private fun trendEntries(scope: StatsScope, mode: BillMode): List<ChartEntry> {
         val summaries = when (scope) {
-            StatsScope.Day -> listOf(statsDate.dayOfMonth to repository.summary(repository.findByDay(statsDate)))
+            StatsScope.Day -> listOf(statsDate.dayOfMonth to repository.daySummary(statsDate))
             StatsScope.Month -> repository.dailySummary(statsDate.year, statsDate.monthValue)
             StatsScope.Year -> repository.monthlySummary(statsDate.year)
             StatsScope.All -> repository.yearlySummary()
@@ -832,6 +875,7 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQ_IMPORT_JSON = 1001
+        private const val DETAIL_LIMIT = 300
         private val Bg = Color.rgb(247, 248, 250)
         private val Primary = Color.rgb(30, 107, 92)
         private val TextMain = Color.rgb(36, 48, 44)

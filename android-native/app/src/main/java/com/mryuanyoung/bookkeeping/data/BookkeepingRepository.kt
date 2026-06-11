@@ -58,6 +58,12 @@ class BookkeepingRepository(context: Context) :
 
     fun findAll(): List<Bill> = query(null, emptyArray())
 
+    fun findRecent(limit: Int): List<Bill> =
+        query(null, emptyArray(), limit)
+
+    fun findRecentByYear(year: Int, limit: Int): List<Bill> =
+        query("year = ?", arrayOf(year.toString()), limit)
+
     fun availableYears(): List<Int> {
         val cursor = readableDatabase.rawQuery("SELECT DISTINCT year FROM bills ORDER BY year DESC", null)
         cursor.use {
@@ -67,16 +73,42 @@ class BookkeepingRepository(context: Context) :
         }
     }
 
-    fun monthlySummary(year: Int): List<Pair<Int, BillSummary>> =
-        (1..12).map { month -> month to summary(findByMonth(year, month)) }
+    fun monthlySummary(year: Int): List<Pair<Int, BillSummary>> {
+        val grouped = groupedSummary("month", "year = ?", arrayOf(year.toString()))
+        return (1..12).map { month -> month to (grouped[month] ?: BillSummary(0.0, 0.0, 0)) }
+    }
 
     fun dailySummary(year: Int, month: Int): List<Pair<Int, BillSummary>> {
         val days = java.time.YearMonth.of(year, month).lengthOfMonth()
-        return (1..days).map { day -> day to summary(findByDay(LocalDate.of(year, month, day))) }
+        val grouped = groupedSummary("day", "year = ? AND month = ?", arrayOf(year.toString(), month.toString()))
+        return (1..days).map { day -> day to (grouped[day] ?: BillSummary(0.0, 0.0, 0)) }
     }
 
-    fun yearlySummary(): List<Pair<Int, BillSummary>> =
-        availableYears().sorted().map { year -> year to summary(findByYear(year)) }
+    fun daySummary(date: LocalDate): BillSummary = summary("year = ? AND month = ? AND day = ?", date.args())
+
+    fun monthSummary(year: Int, month: Int): BillSummary =
+        summary("year = ? AND month = ?", arrayOf(year.toString(), month.toString()))
+
+    fun yearSummary(year: Int): BillSummary = summary("year = ?", arrayOf(year.toString()))
+
+    fun allSummary(): BillSummary = summary(null, emptyArray())
+
+    fun categorySummaryByDay(date: LocalDate, mode: BillMode): List<CategorySummary> =
+        categorySummary("year = ? AND month = ? AND day = ?", date.args(), mode)
+
+    fun categorySummaryByMonth(year: Int, month: Int, mode: BillMode): List<CategorySummary> =
+        categorySummary("year = ? AND month = ?", arrayOf(year.toString(), month.toString()), mode)
+
+    fun categorySummaryByYear(year: Int, mode: BillMode): List<CategorySummary> =
+        categorySummary("year = ?", arrayOf(year.toString()), mode)
+
+    fun categorySummaryAll(mode: BillMode): List<CategorySummary> =
+        categorySummary(null, emptyArray(), mode)
+
+    fun yearlySummary(): List<Pair<Int, BillSummary>> {
+        val grouped = groupedSummary("year", null, emptyArray())
+        return grouped.keys.sorted().map { year -> year to grouped.getValue(year) }
+    }
 
     fun summary(bills: List<Bill>): BillSummary {
         val income = bills.filter { it.mode == BillMode.Import }.sumOf { it.amount }
@@ -91,6 +123,60 @@ class BookkeepingRepository(context: Context) :
                 CategorySummary(type, values.first().typeLabel, values.sumOf { it.amount })
             }
             .sortedByDescending { it.amount }
+
+    private fun summary(where: String?, args: Array<String>): BillSummary {
+        val sql = buildString {
+            append("SELECT ")
+            append("COALESCE(SUM(CASE WHEN mode = 'Import' THEN amount ELSE 0 END), 0), ")
+            append("COALESCE(SUM(CASE WHEN mode = 'Export' THEN amount ELSE 0 END), 0), ")
+            append("COUNT(*) FROM bills")
+            if (where != null) append(" WHERE ").append(where)
+        }
+        readableDatabase.rawQuery(sql, args).use { cursor ->
+            if (!cursor.moveToFirst()) return BillSummary(0.0, 0.0, 0)
+            return BillSummary(cursor.getDouble(0), cursor.getDouble(1), cursor.getInt(2))
+        }
+    }
+
+    private fun groupedSummary(groupColumn: String, where: String?, args: Array<String>): Map<Int, BillSummary> {
+        val sql = buildString {
+            append("SELECT ").append(groupColumn).append(", ")
+            append("COALESCE(SUM(CASE WHEN mode = 'Import' THEN amount ELSE 0 END), 0), ")
+            append("COALESCE(SUM(CASE WHEN mode = 'Export' THEN amount ELSE 0 END), 0), ")
+            append("COUNT(*) FROM bills")
+            if (where != null) append(" WHERE ").append(where)
+            append(" GROUP BY ").append(groupColumn)
+            append(" ORDER BY ").append(groupColumn)
+        }
+        readableDatabase.rawQuery(sql, args).use { cursor ->
+            val result = mutableMapOf<Int, BillSummary>()
+            while (cursor.moveToNext()) {
+                result[cursor.getInt(0)] = BillSummary(cursor.getDouble(1), cursor.getDouble(2), cursor.getInt(3))
+            }
+            return result
+        }
+    }
+
+    private fun categorySummary(where: String?, args: Array<String>, mode: BillMode): List<CategorySummary> {
+        val sql = buildString {
+            append("SELECT type, COALESCE(SUM(amount), 0) FROM bills WHERE mode = ?")
+            if (where != null) append(" AND ").append(where)
+            append(" GROUP BY type ORDER BY COALESCE(SUM(amount), 0) DESC")
+        }
+        val sqlArgs = arrayOf(mode.name, *args)
+        readableDatabase.rawQuery(sql, sqlArgs).use { cursor ->
+            val result = mutableListOf<CategorySummary>()
+            while (cursor.moveToNext()) {
+                val type = cursor.getString(0)
+                val label = when (mode) {
+                    BillMode.Export -> ExportBillType.entries.firstOrNull { it.name == type }?.label ?: type
+                    BillMode.Import -> ImportBillType.entries.firstOrNull { it.name == type }?.label ?: type
+                }
+                result.add(CategorySummary(type, label, cursor.getDouble(1)))
+            }
+            return result
+        }
+    }
 
     fun exportJson(): String {
         val all = findAll()
@@ -125,7 +211,7 @@ class BookkeepingRepository(context: Context) :
         }
     }
 
-    private fun query(where: String?, args: Array<String>): List<Bill> {
+    private fun query(where: String?, args: Array<String>, limit: Int? = null): List<Bill> {
         val cursor = readableDatabase.query(
             "bills",
             null,
@@ -133,7 +219,8 @@ class BookkeepingRepository(context: Context) :
             args,
             null,
             null,
-            "year DESC, month DESC, day DESC, unix DESC"
+            "year DESC, month DESC, day DESC, unix DESC",
+            limit?.toString()
         )
         cursor.use {
             val result = mutableListOf<Bill>()
