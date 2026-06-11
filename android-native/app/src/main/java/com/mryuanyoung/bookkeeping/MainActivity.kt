@@ -15,6 +15,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.widget.ArrayAdapter
+import android.widget.AdapterView
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -41,6 +42,8 @@ import com.mryuanyoung.bookkeeping.data.BookkeepingRepository
 import com.mryuanyoung.bookkeeping.data.CategorySummary
 import com.mryuanyoung.bookkeeping.data.ExportBillType
 import com.mryuanyoung.bookkeeping.data.ImportBillType
+import com.mryuanyoung.bookkeeping.data.RecurringBillRule
+import com.mryuanyoung.bookkeeping.data.RecurringFrequency
 import com.mryuanyoung.bookkeeping.ui.ChartEntry
 import com.mryuanyoung.bookkeeping.ui.ChartMode
 import com.mryuanyoung.bookkeeping.ui.StatChartView
@@ -85,6 +88,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         repository = BookkeepingRepository(this)
         backupFiles = BackupFiles(this)
+        repository.generateDueRecurringBills()
         buildShell()
         showRecord()
     }
@@ -162,10 +166,12 @@ class MainActivity : Activity() {
         }
 
     private fun showRecord() {
+        repository.generateDueRecurringBills()
         currentTab = MainTab.Record
         renderBottomNav()
         val page = page()
         page.addView(title(if (editingBill == null) "记一笔" else "编辑账单"))
+        page.addView(outlineButton("周期记账") { showRecurringBills() })
         page.addView(billForm { showRecord() })
         page.addView(sectionTitle("今天"))
         page.addView(billList(repository.findByDay(LocalDate.now()), allowEdit = true))
@@ -473,6 +479,260 @@ class MainActivity : Activity() {
             box.addView(row)
         }
         return card(box)
+    }
+
+    private fun showRecurringBills() {
+        currentTab = MainTab.Record
+        renderBottomNav()
+        val page = page()
+        page.addView(title("周期记账"))
+        page.addView(outlineButton("返回记账") { showRecord() })
+        page.addView(primaryButton("新增周期记账") { showRecurringRuleDialog() })
+        page.addView(outlineButton("立即检查并生成") {
+            val count = repository.generateDueRecurringBills()
+            toast("已生成 ${count} 笔周期账单")
+            showRecurringBills()
+        })
+        page.addView(sectionTitle("周期规则"))
+        page.addView(recurringRuleList(repository.findRecurringRules()))
+        replace(page)
+    }
+
+    private fun recurringRuleList(rules: List<RecurringBillRule>): View {
+        val box = verticalBox()
+        if (rules.isEmpty()) {
+            box.addView(text("暂无周期记账规则"))
+            return card(box)
+        }
+        rules.forEach { rule ->
+            box.addView(sectionTitle(rule.name))
+            box.addView(text("${recurringText(rule)} | ${if (rule.mode == BillMode.Export) "支出" else "收入"} ${money(rule.amount)} | ${rule.typeLabel}"))
+            if (rule.remark.isNotBlank()) box.addView(text(rule.remark, small = true))
+            box.addView(text("下次生成: ${rule.nextRunDate}", small = true))
+            box.addView(text("状态: ${if (rule.enabled) "启用" else "停用"}", small = true))
+            box.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(smallButton(if (rule.enabled) "停用" else "启用") {
+                    repository.setRecurringRuleEnabled(rule.id, !rule.enabled)
+                    showRecurringBills()
+                })
+                addView(smallButton("编辑") { showRecurringRuleDialog(rule) })
+                addView(smallButton("删除") {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("删除周期记账")
+                        .setMessage("已生成的账单会保留，只删除这条周期规则。")
+                        .setPositiveButton("删除") { _, _ ->
+                            repository.deleteRecurringRule(rule.id)
+                            showRecurringBills()
+                        }
+                        .setNegativeButton("取消", null)
+                        .show()
+                })
+            })
+            box.addView(dividerView())
+        }
+        return card(box)
+    }
+
+    private fun showRecurringRuleDialog(rule: RecurringBillRule? = null) {
+        val box = verticalBox()
+        val now = LocalDate.now()
+        var startDate = rule?.startDate ?: now
+        var endDate = rule?.endDate
+
+        val name = input("名称", rule?.name.orEmpty())
+        val enabled = CheckBox(this).apply {
+            text = "启用"
+            isChecked = rule?.enabled ?: true
+        }
+        val modeGroup = RadioGroup(this).apply {
+            orientation = RadioGroup.HORIZONTAL
+            addView(radio("支出", BillMode.Export.name, rule?.mode != BillMode.Import))
+            addView(radio("收入", BillMode.Import.name, rule?.mode == BillMode.Import))
+        }
+        val typeSpinner = Spinner(this)
+        val amount = input("金额", rule?.amount?.toString().orEmpty(), decimal = true)
+        val remark = input("备注", rule?.remark.orEmpty())
+        val frequencyPairs = RecurringFrequency.entries.map {
+            it to when (it) {
+                RecurringFrequency.Daily -> "每天"
+                RecurringFrequency.Weekly -> "每周"
+                RecurringFrequency.Monthly -> "每月"
+                RecurringFrequency.Yearly -> "每年"
+            }
+        }
+        val frequencySpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, frequencyPairs.map { it.second })
+            setSelection(frequencyPairs.indexOfFirst { it.first == rule?.frequency }.takeIf { it >= 0 } ?: 2)
+        }
+        val interval = input("间隔周期数", (rule?.intervalCount ?: 1).toString(), decimal = false)
+        val dayOfWeek = input("每周几(1-7)", (rule?.dayOfWeek ?: now.dayOfWeek.value).toString(), decimal = false)
+        val dayOfMonth = input("每月/每年几号(1-31)", (rule?.dayOfMonth ?: now.dayOfMonth).toString(), decimal = false)
+        val monthOfYear = input("每年几月(1-12)", (rule?.monthOfYear ?: now.monthValue).toString(), decimal = false)
+        val frequencyHint = text("", small = true)
+        val intervalBox = verticalBox().apply {
+            addView(label("间隔"))
+            addView(text("填 1 表示每个周期都生成；填 2 表示每隔一个周期生成。", small = true))
+            addView(interval)
+        }
+        val weeklyBox = verticalBox().apply {
+            addView(label("周几"))
+            addView(text("仅每周使用。1 到 7 分别表示周一到周日。", small = true))
+            addView(dayOfWeek)
+        }
+        val monthlyDayBox = verticalBox().apply {
+            addView(label("几号"))
+            addView(text("仅每月/每年使用。比如房租每月 1 号扣款就填 1。", small = true))
+            addView(dayOfMonth)
+        }
+        val yearlyMonthBox = verticalBox().apply {
+            addView(label("月份"))
+            addView(text("仅每年使用。比如每年 6 月生成就填 6。", small = true))
+            addView(monthOfYear)
+        }
+        val startButton = outlineButton(startDate.toString()) {
+            pickDate(startDate) { date ->
+                startDate = date
+                (it as Button).text = date.toString()
+            }
+        }
+        val endButton = outlineButton(endDate?.toString() ?: "不设置结束日期") {
+            pickDate(endDate ?: startDate) { date ->
+                endDate = date
+                (it as Button).text = date.toString()
+            }
+        }
+        val clearEndButton = outlineButton("清除结束日期") {
+            endDate = null
+            endButton.text = "不设置结束日期"
+        }
+
+        fun refreshTypes() {
+            val mode = selectedMode(modeGroup)
+            val pairs = if (mode == BillMode.Export) {
+                ExportBillType.entries.map { it.name to it.label }
+            } else {
+                ImportBillType.entries.map { it.name to it.label }
+            }
+            typeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, pairs.map { it.second })
+            typeSpinner.tag = pairs
+            typeSpinner.setSelection(pairs.indexOfFirst { it.first == rule?.type }.takeIf { it >= 0 } ?: 0)
+        }
+
+        fun updateFrequencyFields() {
+            val frequency = frequencyPairs[frequencySpinner.selectedItemPosition].first
+            frequencyHint.text = when (frequency) {
+                RecurringFrequency.Daily -> "每天生成时，只需要设置间隔。"
+                RecurringFrequency.Weekly -> "每周生成时，需要设置间隔和周几。"
+                RecurringFrequency.Monthly -> "每月生成时，需要设置间隔和几号。"
+                RecurringFrequency.Yearly -> "每年生成时，需要设置间隔、月份和几号。"
+            }
+            weeklyBox.visibility = if (frequency == RecurringFrequency.Weekly) View.VISIBLE else View.GONE
+            monthlyDayBox.visibility =
+                if (frequency == RecurringFrequency.Monthly || frequency == RecurringFrequency.Yearly) View.VISIBLE else View.GONE
+            yearlyMonthBox.visibility = if (frequency == RecurringFrequency.Yearly) View.VISIBLE else View.GONE
+        }
+
+        modeGroup.setOnCheckedChangeListener { _, _ -> refreshTypes() }
+        frequencySpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                updateFrequencyFields()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        refreshTypes()
+        updateFrequencyFields()
+
+        box.addView(name)
+        box.addView(enabled)
+        box.addView(label("类型"))
+        box.addView(modeGroup)
+        box.addView(label("类别"))
+        box.addView(typeSpinner)
+        box.addView(amount)
+        box.addView(label("周期"))
+        box.addView(frequencySpinner)
+        box.addView(frequencyHint)
+        box.addView(intervalBox)
+        box.addView(weeklyBox)
+        box.addView(monthlyDayBox)
+        box.addView(yearlyMonthBox)
+        box.addView(label("开始日期"))
+        box.addView(startButton)
+        box.addView(label("结束日期"))
+        box.addView(endButton)
+        box.addView(clearEndButton)
+        box.addView(remark)
+
+        AlertDialog.Builder(this)
+            .setTitle(if (rule == null) "新增周期记账" else "编辑周期记账")
+            .setView(wrapDialogContent(box))
+            .setPositiveButton("保存") { _, _ ->
+                val value = amount.num()
+                val ruleName = name.text.toString().trim()
+                if (ruleName.isBlank() || value <= 0) {
+                    toast("请输入名称和有效金额")
+                    return@setPositiveButton
+                }
+                @Suppress("UNCHECKED_CAST")
+                val typePairs = typeSpinner.tag as List<Pair<String, String>>
+                val frequency = frequencyPairs[frequencySpinner.selectedItemPosition].first
+                val intervalCount = interval.num().toInt().coerceAtLeast(1)
+                val monthlyDay = dayOfMonth.num().toInt().coerceIn(1, 31)
+                val weeklyDay = dayOfWeek.num().toInt().coerceIn(1, 7)
+                val yearlyMonth = monthOfYear.num().toInt().coerceIn(1, 12)
+                val nextRunDate = repository.nextRecurringDate(
+                    frequency,
+                    intervalCount,
+                    maxDate(startDate, now),
+                    if (frequency == RecurringFrequency.Monthly || frequency == RecurringFrequency.Yearly) monthlyDay else null,
+                    if (frequency == RecurringFrequency.Weekly) weeklyDay else null,
+                    if (frequency == RecurringFrequency.Yearly) yearlyMonth else null
+                )
+                val saved = RecurringBillRule(
+                    id = rule?.id ?: 0,
+                    name = ruleName,
+                    enabled = enabled.isChecked,
+                    mode = selectedMode(modeGroup),
+                    amount = value,
+                    type = typePairs[typeSpinner.selectedItemPosition].first,
+                    remark = remark.text.toString(),
+                    frequency = frequency,
+                    intervalCount = intervalCount,
+                    startDate = startDate,
+                    endDate = endDate,
+                    dayOfMonth = if (frequency == RecurringFrequency.Monthly || frequency == RecurringFrequency.Yearly) monthlyDay else null,
+                    dayOfWeek = if (frequency == RecurringFrequency.Weekly) weeklyDay else null,
+                    monthOfYear = if (frequency == RecurringFrequency.Yearly) yearlyMonth else null,
+                    nextRunDate = nextRunDate,
+                    lastRunDate = rule?.lastRunDate,
+                    createdAt = rule?.createdAt ?: System.currentTimeMillis() / 1000,
+                    updatedAt = System.currentTimeMillis() / 1000
+                )
+                if (rule == null) repository.createRecurringRule(saved) else repository.updateRecurringRule(saved)
+                toast("已保存")
+                showRecurringBills()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun recurringText(rule: RecurringBillRule): String =
+        when (rule.frequency) {
+            RecurringFrequency.Daily -> "每 ${rule.intervalCount} 天"
+            RecurringFrequency.Weekly -> "每 ${rule.intervalCount} 周 周${rule.dayOfWeek ?: rule.startDate.dayOfWeek.value}"
+            RecurringFrequency.Monthly -> "每 ${rule.intervalCount} 月 ${rule.dayOfMonth ?: rule.startDate.dayOfMonth} 号"
+            RecurringFrequency.Yearly -> "每 ${rule.intervalCount} 年 ${rule.monthOfYear ?: rule.startDate.monthValue} 月 ${rule.dayOfMonth ?: rule.startDate.dayOfMonth} 号"
+        }
+
+    private fun maxDate(a: LocalDate, b: LocalDate): LocalDate = if (a.isAfter(b)) a else b
+
+    private fun dividerView(): View = View(this).apply {
+        setBackgroundColor(Color.rgb(230, 233, 232))
+        layoutParams = LinearLayout.LayoutParams(-1, dp(1)).apply {
+            setMargins(0, dp(8), 0, dp(8))
+        }
     }
 
     private fun showProfile() {

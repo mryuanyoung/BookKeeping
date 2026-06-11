@@ -2,14 +2,17 @@ package com.mryuanyoung.bookkeeping.data
 
 import android.content.ContentValues
 import android.content.Context
+import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
+import java.time.YearMonth
+import kotlin.math.min
 
 class BookkeepingRepository(context: Context) :
-    SQLiteOpenHelper(context, "bookkeeping.db", null, 1) {
+    SQLiteOpenHelper(context, "bookkeeping.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -24,20 +27,28 @@ class BookkeepingRepository(context: Context) :
                 month INTEGER NOT NULL,
                 day INTEGER NOT NULL,
                 dateStr TEXT NOT NULL,
-                unix INTEGER NOT NULL
+                unix INTEGER NOT NULL,
+                recurringRuleId INTEGER,
+                recurringOccurrenceDate TEXT
             )
             """.trimIndent()
         )
         db.execSQL("CREATE INDEX idx_bills_date ON bills(year, month, day)")
         db.execSQL("CREATE INDEX idx_bills_mode_date ON bills(mode, dateStr)")
+        db.execSQL("CREATE INDEX idx_bills_recurring ON bills(recurringRuleId, recurringOccurrenceDate)")
+        createRecurringTables(db)
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
-
-    fun create(bill: Bill): Long {
-        val id = writableDatabase.insert("bills", null, bill.valuesWithoutId())
-        return id
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            addColumnIfMissing(db, "bills", "recurringRuleId", "INTEGER")
+            addColumnIfMissing(db, "bills", "recurringOccurrenceDate", "TEXT")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_bills_recurring ON bills(recurringRuleId, recurringOccurrenceDate)")
+            createRecurringTables(db)
+        }
     }
+
+    fun create(bill: Bill): Long = insertBill(writableDatabase, bill)
 
     fun update(bill: Bill) {
         writableDatabase.update("bills", bill.valuesWithoutId(), "id = ?", arrayOf(bill.id.toString()))
@@ -70,6 +81,158 @@ class BookkeepingRepository(context: Context) :
             val years = mutableListOf<Int>()
             while (it.moveToNext()) years.add(it.getInt(0))
             return years
+        }
+    }
+
+    fun createRecurringRule(rule: RecurringBillRule): Long =
+        writableDatabase.insert("recurring_bill_rules", null, rule.valuesWithoutId())
+
+    fun updateRecurringRule(rule: RecurringBillRule) {
+        writableDatabase.update(
+            "recurring_bill_rules",
+            rule.valuesWithoutId(),
+            "id = ?",
+            arrayOf(rule.id.toString())
+        )
+    }
+
+    fun deleteRecurringRule(id: Long) {
+        writableDatabase.beginTransaction()
+        try {
+            writableDatabase.delete("recurring_bill_rules", "id = ?", arrayOf(id.toString()))
+            writableDatabase.delete("recurring_bill_logs", "ruleId = ?", arrayOf(id.toString()))
+            writableDatabase.setTransactionSuccessful()
+        } finally {
+            writableDatabase.endTransaction()
+        }
+    }
+
+    fun setRecurringRuleEnabled(id: Long, enabled: Boolean) {
+        writableDatabase.update(
+            "recurring_bill_rules",
+            ContentValues().apply {
+                put("enabled", if (enabled) 1 else 0)
+                put("updatedAt", nowSeconds())
+            },
+            "id = ?",
+            arrayOf(id.toString())
+        )
+    }
+
+    fun findRecurringRules(): List<RecurringBillRule> {
+        val cursor = readableDatabase.query(
+            "recurring_bill_rules",
+            null,
+            null,
+            emptyArray(),
+            null,
+            null,
+            "enabled DESC, nextRunDate ASC, id DESC"
+        )
+        cursor.use {
+            val result = mutableListOf<RecurringBillRule>()
+            while (it.moveToNext()) result.add(it.toRecurringRule())
+            return result
+        }
+    }
+
+    fun generateDueRecurringBills(today: LocalDate = LocalDate.now()): Int {
+        val rules = findDueRecurringRules(today)
+        if (rules.isEmpty()) return 0
+
+        var generated = 0
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            rules.forEach { rule ->
+                var occurrence = rule.nextRunDate
+                var lastRun = rule.lastRunDate
+                while (!occurrence.isAfter(today) && (rule.endDate == null || !occurrence.isAfter(rule.endDate))) {
+                    if (!recurringLogExists(db, rule.id, occurrence)) {
+                        val billId = insertBill(
+                            db,
+                            Bill(
+                                mode = rule.mode,
+                                amount = rule.amount,
+                                type = rule.type,
+                                remark = rule.remark,
+                                date = occurrence,
+                                recurringRuleId = rule.id,
+                                recurringOccurrenceDate = occurrence
+                            )
+                        )
+                        db.insert(
+                            "recurring_bill_logs",
+                            null,
+                            RecurringBillLog(
+                                ruleId = rule.id,
+                                occurrenceDate = occurrence,
+                                billId = billId
+                            ).valuesWithoutId()
+                        )
+                        generated++
+                    }
+                    lastRun = occurrence
+                    occurrence = nextOccurrenceAfter(rule, occurrence)
+                }
+                db.update(
+                    "recurring_bill_rules",
+                    ContentValues().apply {
+                        put("nextRunDate", occurrence.toString())
+                        if (lastRun != null) put("lastRunDate", lastRun.toString())
+                        put("updatedAt", nowSeconds())
+                    },
+                    "id = ?",
+                    arrayOf(rule.id.toString())
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return generated
+    }
+
+    fun nextRecurringDate(
+        frequency: RecurringFrequency,
+        intervalCount: Int,
+        startDate: LocalDate,
+        dayOfMonth: Int?,
+        dayOfWeek: Int?,
+        monthOfYear: Int?
+    ): LocalDate {
+        val interval = intervalCount.coerceAtLeast(1)
+        return when (frequency) {
+            RecurringFrequency.Daily -> startDate
+            RecurringFrequency.Weekly -> {
+                val targetDay = (dayOfWeek ?: startDate.dayOfWeek.value).coerceIn(1, 7)
+                var candidate = startDate.plusDays(((targetDay - startDate.dayOfWeek.value + 7) % 7).toLong())
+                while (candidate.isBefore(startDate)) candidate = candidate.plusWeeks(interval.toLong())
+                candidate
+            }
+            RecurringFrequency.Monthly -> {
+                val day = (dayOfMonth ?: startDate.dayOfMonth).coerceIn(1, 31)
+                var month = YearMonth.from(startDate)
+                var candidate = month.atDay(min(day, month.lengthOfMonth()))
+                while (candidate.isBefore(startDate)) {
+                    month = month.plusMonths(interval.toLong())
+                    candidate = month.atDay(min(day, month.lengthOfMonth()))
+                }
+                candidate
+            }
+            RecurringFrequency.Yearly -> {
+                val monthValue = (monthOfYear ?: startDate.monthValue).coerceIn(1, 12)
+                val day = (dayOfMonth ?: startDate.dayOfMonth).coerceIn(1, 31)
+                var year = startDate.year
+                var yearMonth = YearMonth.of(year, monthValue)
+                var candidate = yearMonth.atDay(min(day, yearMonth.lengthOfMonth()))
+                while (candidate.isBefore(startDate)) {
+                    year += interval
+                    yearMonth = YearMonth.of(year, monthValue)
+                    candidate = yearMonth.atDay(min(day, yearMonth.lengthOfMonth()))
+                }
+                candidate
+            }
         }
     }
 
@@ -188,26 +351,74 @@ class BookkeepingRepository(context: Context) :
         return JSONObject()
             .put("importBill", importBill)
             .put("exportBill", exportBill)
+            .put("recurringBillRules", JSONArray().apply { findRecurringRules().forEach { put(it.toJson()) } })
+            .put("recurringBillLogs", JSONArray().apply { findRecurringLogs().forEach { put(it.toJson()) } })
             .toString(2)
     }
 
     fun importJson(text: String) {
         val root = JSONObject(text)
         val bills = mutableListOf<Bill>()
+        val rules = mutableListOf<RecurringBillRule>()
+        val logs = mutableListOf<RecurringBillLog>()
         root.optJSONArray("importBill")?.let { arr ->
             for (i in 0 until arr.length()) bills.add(arr.getJSONObject(i).toBill(BillMode.Import))
         }
         root.optJSONArray("exportBill")?.let { arr ->
             for (i in 0 until arr.length()) bills.add(arr.getJSONObject(i).toBill(BillMode.Export))
         }
+        root.optJSONArray("recurringBillRules")?.let { arr ->
+            for (i in 0 until arr.length()) rules.add(arr.getJSONObject(i).toRecurringRule())
+        }
+        root.optJSONArray("recurringBillLogs")?.let { arr ->
+            for (i in 0 until arr.length()) logs.add(arr.getJSONObject(i).toRecurringLog())
+        }
 
         writableDatabase.beginTransaction()
         try {
             writableDatabase.delete("bills", null, null)
+            writableDatabase.delete("recurring_bill_logs", null, null)
+            writableDatabase.delete("recurring_bill_rules", null, null)
             bills.forEach { writableDatabase.insert("bills", null, it.valuesWithoutId()) }
+            rules.forEach { writableDatabase.insert("recurring_bill_rules", null, it.valuesWithId()) }
+            logs.forEach { writableDatabase.insert("recurring_bill_logs", null, it.valuesWithId()) }
             writableDatabase.setTransactionSuccessful()
         } finally {
             writableDatabase.endTransaction()
+        }
+    }
+
+    private fun findDueRecurringRules(today: LocalDate): List<RecurringBillRule> {
+        val cursor = readableDatabase.query(
+            "recurring_bill_rules",
+            null,
+            "enabled = 1 AND nextRunDate <= ?",
+            arrayOf(today.toString()),
+            null,
+            null,
+            "nextRunDate ASC"
+        )
+        cursor.use {
+            val result = mutableListOf<RecurringBillRule>()
+            while (it.moveToNext()) result.add(it.toRecurringRule())
+            return result
+        }
+    }
+
+    private fun findRecurringLogs(): List<RecurringBillLog> {
+        val cursor = readableDatabase.query(
+            "recurring_bill_logs",
+            null,
+            null,
+            emptyArray(),
+            null,
+            null,
+            "createdAt ASC"
+        )
+        cursor.use {
+            val result = mutableListOf<RecurringBillLog>()
+            while (it.moveToNext()) result.add(it.toRecurringLog())
+            return result
         }
     }
 
@@ -224,24 +435,91 @@ class BookkeepingRepository(context: Context) :
         )
         cursor.use {
             val result = mutableListOf<Bill>()
-            while (it.moveToNext()) {
-                result.add(
-                    Bill(
-                        id = it.getLong(it.getColumnIndexOrThrow("id")),
-                        mode = BillMode.valueOf(it.getString(it.getColumnIndexOrThrow("mode"))),
-                        amount = it.getDouble(it.getColumnIndexOrThrow("amount")),
-                        type = it.getString(it.getColumnIndexOrThrow("type")),
-                        remark = it.getString(it.getColumnIndexOrThrow("remark")),
-                        date = LocalDate.of(
-                            it.getInt(it.getColumnIndexOrThrow("year")),
-                            it.getInt(it.getColumnIndexOrThrow("month")),
-                            it.getInt(it.getColumnIndexOrThrow("day"))
-                        ),
-                        unix = it.getLong(it.getColumnIndexOrThrow("unix"))
-                    )
-                )
-            }
+            while (it.moveToNext()) result.add(it.toBill())
             return result
+        }
+    }
+
+    private fun createRecurringTables(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS recurring_bill_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                enabled INTEGER NOT NULL,
+                mode TEXT NOT NULL,
+                amount REAL NOT NULL,
+                type TEXT NOT NULL,
+                remark TEXT NOT NULL,
+                frequency TEXT NOT NULL,
+                intervalCount INTEGER NOT NULL,
+                startDate TEXT NOT NULL,
+                endDate TEXT,
+                dayOfMonth INTEGER,
+                dayOfWeek INTEGER,
+                monthOfYear INTEGER,
+                nextRunDate TEXT NOT NULL,
+                lastRunDate TEXT,
+                createdAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS recurring_bill_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ruleId INTEGER NOT NULL,
+                occurrenceDate TEXT NOT NULL,
+                billId INTEGER NOT NULL,
+                createdAt INTEGER NOT NULL,
+                UNIQUE(ruleId, occurrenceDate)
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_recurring_rules_due ON recurring_bill_rules(enabled, nextRunDate)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_recurring_logs_rule ON recurring_bill_logs(ruleId, occurrenceDate)")
+    }
+
+    private fun addColumnIfMissing(db: SQLiteDatabase, table: String, column: String, type: String) {
+        db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
+            while (cursor.moveToNext()) {
+                if (cursor.getString(cursor.getColumnIndexOrThrow("name")) == column) return
+            }
+        }
+        db.execSQL("ALTER TABLE $table ADD COLUMN $column $type")
+    }
+
+    private fun insertBill(db: SQLiteDatabase, bill: Bill): Long =
+        db.insert("bills", null, bill.valuesWithoutId())
+
+    private fun recurringLogExists(db: SQLiteDatabase, ruleId: Long, occurrenceDate: LocalDate): Boolean {
+        db.query(
+            "recurring_bill_logs",
+            arrayOf("id"),
+            "ruleId = ? AND occurrenceDate = ?",
+            arrayOf(ruleId.toString(), occurrenceDate.toString()),
+            null,
+            null,
+            null,
+            "1"
+        ).use { return it.moveToFirst() }
+    }
+
+    private fun nextOccurrenceAfter(rule: RecurringBillRule, occurrence: LocalDate): LocalDate {
+        val interval = rule.intervalCount.coerceAtLeast(1)
+        return when (rule.frequency) {
+            RecurringFrequency.Daily -> occurrence.plusDays(interval.toLong())
+            RecurringFrequency.Weekly -> occurrence.plusWeeks(interval.toLong())
+            RecurringFrequency.Monthly -> {
+                val month = YearMonth.from(occurrence).plusMonths(interval.toLong())
+                month.atDay(min(rule.dayOfMonth ?: occurrence.dayOfMonth, month.lengthOfMonth()))
+            }
+            RecurringFrequency.Yearly -> {
+                val month = (rule.monthOfYear ?: occurrence.monthValue).coerceIn(1, 12)
+                val yearMonth = YearMonth.of(occurrence.year + interval, month)
+                yearMonth.atDay(min(rule.dayOfMonth ?: occurrence.dayOfMonth, yearMonth.lengthOfMonth()))
+            }
         }
     }
 
@@ -257,6 +535,43 @@ class BookkeepingRepository(context: Context) :
         put("day", date.dayOfMonth)
         put("dateStr", dateStr)
         put("unix", unix)
+        put("recurringRuleId", recurringRuleId)
+        put("recurringOccurrenceDate", recurringOccurrenceDate?.toString())
+    }
+
+    private fun RecurringBillRule.valuesWithoutId() = ContentValues().apply {
+        put("name", name)
+        put("enabled", if (enabled) 1 else 0)
+        put("mode", mode.name)
+        put("amount", amount)
+        put("type", type)
+        put("remark", remark)
+        put("frequency", frequency.name)
+        put("intervalCount", intervalCount.coerceAtLeast(1))
+        put("startDate", startDate.toString())
+        put("endDate", endDate?.toString())
+        put("dayOfMonth", dayOfMonth)
+        put("dayOfWeek", dayOfWeek)
+        put("monthOfYear", monthOfYear)
+        put("nextRunDate", nextRunDate.toString())
+        put("lastRunDate", lastRunDate?.toString())
+        put("createdAt", createdAt)
+        put("updatedAt", updatedAt)
+    }
+
+    private fun RecurringBillRule.valuesWithId() = valuesWithoutId().apply {
+        if (id > 0) put("id", id)
+    }
+
+    private fun RecurringBillLog.valuesWithoutId() = ContentValues().apply {
+        put("ruleId", ruleId)
+        put("occurrenceDate", occurrenceDate.toString())
+        put("billId", billId)
+        put("createdAt", createdAt)
+    }
+
+    private fun RecurringBillLog.valuesWithId() = valuesWithoutId().apply {
+        if (id > 0) put("id", id)
     }
 
     private fun Bill.toWebJson() = JSONObject()
@@ -269,6 +584,35 @@ class BookkeepingRepository(context: Context) :
         .put("remark", remark)
         .put("unix", unix)
         .put("type", type)
+        .put("recurringRuleId", recurringRuleId ?: JSONObject.NULL)
+        .put("recurringOccurrenceDate", recurringOccurrenceDate?.toString() ?: JSONObject.NULL)
+
+    private fun RecurringBillRule.toJson() = JSONObject()
+        .put("id", id)
+        .put("name", name)
+        .put("enabled", enabled)
+        .put("mode", mode.name)
+        .put("amount", amount)
+        .put("type", type)
+        .put("remark", remark)
+        .put("frequency", frequency.name)
+        .put("intervalCount", intervalCount)
+        .put("startDate", startDate.toString())
+        .put("endDate", endDate?.toString() ?: JSONObject.NULL)
+        .put("dayOfMonth", dayOfMonth ?: JSONObject.NULL)
+        .put("dayOfWeek", dayOfWeek ?: JSONObject.NULL)
+        .put("monthOfYear", monthOfYear ?: JSONObject.NULL)
+        .put("nextRunDate", nextRunDate.toString())
+        .put("lastRunDate", lastRunDate?.toString() ?: JSONObject.NULL)
+        .put("createdAt", createdAt)
+        .put("updatedAt", updatedAt)
+
+    private fun RecurringBillLog.toJson() = JSONObject()
+        .put("id", id)
+        .put("ruleId", ruleId)
+        .put("occurrenceDate", occurrenceDate.toString())
+        .put("billId", billId)
+        .put("createdAt", createdAt)
 
     private fun JSONObject.toBill(mode: BillMode): Bill {
         val dateObj = optJSONObject("date")
@@ -284,7 +628,114 @@ class BookkeepingRepository(context: Context) :
             type = getString("type"),
             remark = optString("remark", ""),
             date = parsedDate,
-            unix = optLong("unix", System.currentTimeMillis() / 1000)
+            unix = optLong("unix", nowSeconds()),
+            recurringRuleId = optNullableLong("recurringRuleId"),
+            recurringOccurrenceDate = optNullableDate("recurringOccurrenceDate")
         )
     }
+
+    private fun JSONObject.toRecurringRule(): RecurringBillRule =
+        RecurringBillRule(
+            id = optLong("id", 0),
+            name = getString("name"),
+            enabled = optBoolean("enabled", true),
+            mode = BillMode.valueOf(getString("mode")),
+            amount = getDouble("amount"),
+            type = getString("type"),
+            remark = optString("remark", ""),
+            frequency = RecurringFrequency.valueOf(getString("frequency")),
+            intervalCount = optInt("intervalCount", 1).coerceAtLeast(1),
+            startDate = LocalDate.parse(getString("startDate")),
+            endDate = optNullableDate("endDate"),
+            dayOfMonth = optNullableInt("dayOfMonth"),
+            dayOfWeek = optNullableInt("dayOfWeek"),
+            monthOfYear = optNullableInt("monthOfYear"),
+            nextRunDate = LocalDate.parse(getString("nextRunDate")),
+            lastRunDate = optNullableDate("lastRunDate"),
+            createdAt = optLong("createdAt", nowSeconds()),
+            updatedAt = optLong("updatedAt", nowSeconds())
+        )
+
+    private fun JSONObject.toRecurringLog(): RecurringBillLog =
+        RecurringBillLog(
+            id = optLong("id", 0),
+            ruleId = getLong("ruleId"),
+            occurrenceDate = LocalDate.parse(getString("occurrenceDate")),
+            billId = getLong("billId"),
+            createdAt = optLong("createdAt", nowSeconds())
+        )
+
+    private fun Cursor.toBill(): Bill =
+        Bill(
+            id = getLong(getColumnIndexOrThrow("id")),
+            mode = BillMode.valueOf(getString(getColumnIndexOrThrow("mode"))),
+            amount = getDouble(getColumnIndexOrThrow("amount")),
+            type = getString(getColumnIndexOrThrow("type")),
+            remark = getString(getColumnIndexOrThrow("remark")),
+            date = LocalDate.of(
+                getInt(getColumnIndexOrThrow("year")),
+                getInt(getColumnIndexOrThrow("month")),
+                getInt(getColumnIndexOrThrow("day"))
+            ),
+            unix = getLong(getColumnIndexOrThrow("unix")),
+            recurringRuleId = nullableLong("recurringRuleId"),
+            recurringOccurrenceDate = nullableDate("recurringOccurrenceDate")
+        )
+
+    private fun Cursor.toRecurringRule(): RecurringBillRule =
+        RecurringBillRule(
+            id = getLong(getColumnIndexOrThrow("id")),
+            name = getString(getColumnIndexOrThrow("name")),
+            enabled = getInt(getColumnIndexOrThrow("enabled")) == 1,
+            mode = BillMode.valueOf(getString(getColumnIndexOrThrow("mode"))),
+            amount = getDouble(getColumnIndexOrThrow("amount")),
+            type = getString(getColumnIndexOrThrow("type")),
+            remark = getString(getColumnIndexOrThrow("remark")),
+            frequency = RecurringFrequency.valueOf(getString(getColumnIndexOrThrow("frequency"))),
+            intervalCount = getInt(getColumnIndexOrThrow("intervalCount")).coerceAtLeast(1),
+            startDate = LocalDate.parse(getString(getColumnIndexOrThrow("startDate"))),
+            endDate = nullableDate("endDate"),
+            dayOfMonth = nullableInt("dayOfMonth"),
+            dayOfWeek = nullableInt("dayOfWeek"),
+            monthOfYear = nullableInt("monthOfYear"),
+            nextRunDate = LocalDate.parse(getString(getColumnIndexOrThrow("nextRunDate"))),
+            lastRunDate = nullableDate("lastRunDate"),
+            createdAt = getLong(getColumnIndexOrThrow("createdAt")),
+            updatedAt = getLong(getColumnIndexOrThrow("updatedAt"))
+        )
+
+    private fun Cursor.toRecurringLog(): RecurringBillLog =
+        RecurringBillLog(
+            id = getLong(getColumnIndexOrThrow("id")),
+            ruleId = getLong(getColumnIndexOrThrow("ruleId")),
+            occurrenceDate = LocalDate.parse(getString(getColumnIndexOrThrow("occurrenceDate"))),
+            billId = getLong(getColumnIndexOrThrow("billId")),
+            createdAt = getLong(getColumnIndexOrThrow("createdAt"))
+        )
+
+    private fun Cursor.nullableInt(column: String): Int? {
+        val idx = getColumnIndex(column)
+        return if (idx < 0 || isNull(idx)) null else getInt(idx)
+    }
+
+    private fun Cursor.nullableLong(column: String): Long? {
+        val idx = getColumnIndex(column)
+        return if (idx < 0 || isNull(idx)) null else getLong(idx)
+    }
+
+    private fun Cursor.nullableDate(column: String): LocalDate? {
+        val idx = getColumnIndex(column)
+        return if (idx < 0 || isNull(idx)) null else LocalDate.parse(getString(idx))
+    }
+
+    private fun JSONObject.optNullableInt(key: String): Int? =
+        if (has(key) && !isNull(key)) optInt(key) else null
+
+    private fun JSONObject.optNullableLong(key: String): Long? =
+        if (has(key) && !isNull(key)) optLong(key) else null
+
+    private fun JSONObject.optNullableDate(key: String): LocalDate? =
+        if (has(key) && !isNull(key)) LocalDate.parse(optString(key)) else null
+
+    private fun nowSeconds(): Long = System.currentTimeMillis() / 1000
 }
