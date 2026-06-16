@@ -1,6 +1,30 @@
-因为***网易有钱***倒闭，并且把我的数据清了，并且本地数据都***无法导出***，导致我16年以来的记账数据都没了，所以我自己打算做一个h5 pwa app记账小工具，名为**网易没钱**
+# BookKeeping
 
-# TODO
-- 用go把后端CRUD（包括登录注册个人信息等接口）服务搭起来
-- 支持用备注（+日期、类型）查找账单
-- 未完待续
+BookKeeping is organized as a lightweight monorepo for the Web app, native Android app, and future backend services.
+
+## Repository Layout
+
+- `apps/web`: React + Vite bookkeeping Web/PWA app.
+- `apps/android`: Native Android/Kotlin app.
+- `services/api`: Reserved for the future Go backend service.
+- `packages`: Reserved for shared contracts, schemas, generated clients, or common tooling.
+
+## Common Commands
+
+Run commands from the repository root.
+
+```sh
+pnpm install
+pnpm dev:web
+pnpm build:web
+pnpm build:android
+pnpm build
+pnpm run ci
+```
+
+## Notes
+
+- Web remains the Docker-deployed application.
+- Android is built in CI with Gradle Wrapper, but no APK/AAB publishing is configured yet.
+- The future Go service should live in `services/api`; shared API contracts should live under `packages` when both apps need them.
+- The previous root README content had historical Chinese text with encoding corruption. Preserve or rewrite that history in a separate documentation cleanup.
