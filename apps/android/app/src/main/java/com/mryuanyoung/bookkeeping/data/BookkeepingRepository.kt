@@ -75,6 +75,77 @@ class BookkeepingRepository(context: Context) :
     fun findRecentByYear(year: Int, limit: Int): List<Bill> =
         query("year = ?", arrayOf(year.toString()), limit)
 
+    fun searchBills(
+        keyword: String,
+        startDate: LocalDate?,
+        endDate: LocalDate?,
+        mode: BillMode?,
+        minAmount: Double?,
+        maxAmount: Double?
+    ): List<Bill> {
+        val where = mutableListOf<String>()
+        val args = mutableListOf<String>()
+
+        if (startDate != null || endDate != null) {
+            val from = when {
+                startDate == null -> null
+                endDate != null && startDate.isAfter(endDate) -> endDate
+                else -> startDate
+            }
+            val to = when {
+                endDate == null -> null
+                startDate != null && startDate.isAfter(endDate) -> startDate
+                else -> endDate
+            }
+
+            if (from != null) {
+                where.add("((year > ?) OR (year = ? AND month > ?) OR (year = ? AND month = ? AND day >= ?))")
+                args.addAll(
+                    listOf(
+                        from.year.toString(),
+                        from.year.toString(),
+                        from.monthValue.toString(),
+                        from.year.toString(),
+                        from.monthValue.toString(),
+                        from.dayOfMonth.toString()
+                    )
+                )
+            }
+            if (to != null) {
+                where.add("((year < ?) OR (year = ? AND month < ?) OR (year = ? AND month = ? AND day <= ?))")
+                args.addAll(
+                    listOf(
+                        to.year.toString(),
+                        to.year.toString(),
+                        to.monthValue.toString(),
+                        to.year.toString(),
+                        to.monthValue.toString(),
+                        to.dayOfMonth.toString()
+                    )
+                )
+            }
+        }
+
+        if (mode != null) {
+            where.add("mode = ?")
+            args.add(mode.name)
+        }
+        keyword.trim().takeIf { it.isNotBlank() }?.let {
+            where.add("remark LIKE ? ESCAPE '\\'")
+            args.add("%${it.escapeLike()}%")
+        }
+        if (minAmount != null) {
+            where.add("amount >= ?")
+            args.add(minAmount.toString())
+        }
+        if (maxAmount != null) {
+            where.add("amount <= ?")
+            args.add(maxAmount.toString())
+        }
+
+        return query(where.takeIf { it.isNotEmpty() }?.joinToString(" AND "), args.toTypedArray())
+    }
+
     fun availableYears(): List<Int> {
         val cursor = readableDatabase.rawQuery("SELECT DISTINCT year FROM bills ORDER BY year DESC", null)
         cursor.use {
@@ -439,6 +510,11 @@ class BookkeepingRepository(context: Context) :
             return result
         }
     }
+
+    private fun String.escapeLike(): String =
+        replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
 
     private fun createRecurringTables(db: SQLiteDatabase) {
         db.execSQL(

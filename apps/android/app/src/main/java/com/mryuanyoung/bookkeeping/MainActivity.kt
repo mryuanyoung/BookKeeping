@@ -34,7 +34,6 @@ import com.mryuanyoung.bookkeeping.calc.Loan
 import com.mryuanyoung.bookkeeping.calc.PaymentType
 import com.mryuanyoung.bookkeeping.calc.SalaryCalculator
 import com.mryuanyoung.bookkeeping.calc.SalaryInput
-import com.mryuanyoung.bookkeeping.data.BackupFiles
 import com.mryuanyoung.bookkeeping.data.Bill
 import com.mryuanyoung.bookkeeping.data.BillMode
 import com.mryuanyoung.bookkeeping.data.BillSummary
@@ -48,19 +47,21 @@ import com.mryuanyoung.bookkeeping.ui.ChartEntry
 import com.mryuanyoung.bookkeeping.ui.ChartMode
 import com.mryuanyoung.bookkeeping.ui.StatChartView
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.min
 
 class MainActivity : Activity() {
     private lateinit var repository: BookkeepingRepository
-    private lateinit var backupFiles: BackupFiles
     private lateinit var content: FrameLayout
     private lateinit var navContainer: LinearLayout
     private var editingBill: Bill? = null
     private var selectedBillDate: LocalDate = LocalDate.now()
     private var statsDate: LocalDate = LocalDate.now()
     private var statsScope: StatsScope = StatsScope.Month
+    private var accountSubTab: AccountSubTab = AccountSubTab.Detail
     private var currentTab: MainTab = MainTab.Record
 
     private enum class StatsScope(val label: String) {
@@ -76,6 +77,11 @@ class MainActivity : Activity() {
         Profile
     }
 
+    private enum class AccountSubTab(val label: String) {
+        Detail("明细"),
+        Stats("统计")
+    }
+
     private data class StatsReport(
         val detailBills: List<Bill>,
         val summary: BillSummary,
@@ -87,7 +93,6 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repository = BookkeepingRepository(this)
-        backupFiles = BackupFiles(this)
         repository.generateDueRecurringBills()
         buildShell()
         showRecord()
@@ -95,16 +100,30 @@ class MainActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQ_IMPORT_JSON && resultCode == RESULT_OK) {
-            val uri = data?.data ?: return
-            runCatching {
-                contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                    ?: error("文件为空")
-            }.onSuccess {
-                repository.importJson(it)
-                toast("导入成功")
-                showAccount()
-            }.onFailure { toast("导入失败: ${it.message}") }
+        if (resultCode != RESULT_OK) return
+        when (requestCode) {
+            REQ_IMPORT_JSON -> {
+                val uri = data?.data ?: return
+                runCatching {
+                    contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                        ?: error("文件为空")
+                }.onSuccess {
+                    repository.importJson(it)
+                    toast("导入成功")
+                    showAccount()
+                }.onFailure { toast("导入失败: ${it.message}") }
+            }
+
+            REQ_EXPORT_JSON -> {
+                val uri = data?.data ?: return
+                runCatching {
+                    contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {
+                        it.write(repository.exportJson())
+                    } ?: error("无法打开文件")
+                }.onSuccess {
+                    toast("导出成功")
+                }.onFailure { toast("导出失败: ${it.message}") }
+            }
         }
     }
 
@@ -270,15 +289,19 @@ class MainActivity : Activity() {
         page.addView(title("账单"))
         page.addView(scopeTabs(scope))
         page.addView(periodControls(scope))
+        page.addView(outlineButton("搜索账单") { showBillSearch() })
 
         val report = statsReport(scope)
         addBillSummary(page, report.summary, periodTitle(scope))
-        page.addView(trendCard("支出统计", scope, BillMode.Export))
-        page.addView(trendCard("收入统计", scope, BillMode.Import))
-        page.addView(categoryCard("支出", report.expenseCategories, ChartMode.Pie))
-        page.addView(categoryCard("收入", report.incomeCategories, ChartMode.Pie))
-        page.addView(sectionTitle(if (report.detailLimited) "账单明细(最近300笔)" else "账单明细"))
-        page.addView(billList(report.detailBills, allowEdit = true))
+        page.addView(accountSubTabs(accountSubTab, scope))
+        when (accountSubTab) {
+            AccountSubTab.Detail -> {
+                page.addView(sectionTitle(if (report.detailLimited) "账单明细(最近300笔)" else "账单明细"))
+                page.addView(billList(report.detailBills, allowEdit = true))
+            }
+
+            AccountSubTab.Stats -> addStatsContent(page, scope, report)
+        }
         replace(page)
     }
 
@@ -286,6 +309,25 @@ class MainActivity : Activity() {
         orientation = LinearLayout.HORIZONTAL
         StatsScope.entries.forEach { scope ->
             addView(if (scope == selected) primarySmallButton(scope.label) { renderStats(scope) } else smallButton(scope.label) { renderStats(scope) })
+        }
+    }
+
+    private fun accountSubTabs(selected: AccountSubTab, scope: StatsScope): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        AccountSubTab.entries.forEach { tab ->
+            addView(
+                if (tab == selected) {
+                    primarySmallButton(tab.label) {
+                        accountSubTab = tab
+                        renderStats(scope)
+                    }
+                } else {
+                    smallButton(tab.label) {
+                        accountSubTab = tab
+                        renderStats(scope)
+                    }
+                }
+            )
         }
     }
 
@@ -389,14 +431,183 @@ class MainActivity : Activity() {
             StatsScope.All -> "全部账单"
         }
 
+    private fun showBillSearch(
+        keyword: String = "",
+        startDate: LocalDate? = null,
+        endDate: LocalDate? = null,
+        mode: BillMode? = BillMode.Export,
+        minAmount: String = "",
+        maxAmount: String = "",
+        hasSearched: Boolean = false
+    ) {
+        currentTab = MainTab.Account
+        renderBottomNav()
+
+        var selectedStartDate = startDate
+        var selectedEndDate = endDate
+        val page = page()
+        page.addView(title("搜索账单"))
+        page.addView(outlineButton("返回账单") { renderStats(statsScope) })
+
+        val keywordInput = input("备注关键词", keyword)
+        val modeGroup = RadioGroup(this).apply {
+            orientation = RadioGroup.HORIZONTAL
+            addView(radio("支出", BillMode.Export.name, mode == BillMode.Export))
+            addView(radio("收入", BillMode.Import.name, mode == BillMode.Import))
+            addView(radio("全部", SEARCH_MODE_ALL, mode == null))
+        }
+        val minInput = input("最低金额", minAmount, decimal = true)
+        val maxInput = input("最高金额", maxAmount, decimal = true)
+
+        page.addView(card(verticalBox().apply {
+            addView(sectionTitle("筛选条件"))
+            addView(label("备注"))
+            addView(keywordInput)
+            addView(label("类型"))
+            addView(modeGroup)
+            addView(label("日期范围"))
+            addView(dateRangeControls(selectedStartDate, selectedEndDate) { start, end ->
+                selectedStartDate = start
+                selectedEndDate = end
+            })
+            addView(label("金额区间"))
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(minInput, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                    setMargins(0, 0, dp(6), 0)
+                })
+                addView(maxInput, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                    setMargins(dp(6), 0, 0, 0)
+                })
+            })
+            addView(primaryButton("搜索") {
+                showBillSearch(
+                    keyword = keywordInput.text.toString(),
+                    startDate = selectedStartDate,
+                    endDate = selectedEndDate,
+                    mode = selectedSearchMode(modeGroup),
+                    minAmount = minInput.text.toString(),
+                    maxAmount = maxInput.text.toString(),
+                    hasSearched = true
+                )
+            })
+        }))
+
+        if (hasSearched) {
+            val result = searchBills(keyword, startDate, endDate, mode, minAmount, maxAmount)
+            page.addView(sectionTitle("搜索结果(${result.size})"))
+            page.addView(billList(result, allowEdit = true))
+        } else {
+            page.addView(card(verticalBox().apply {
+                addView(text("设置条件后点击搜索查看结果"))
+            }))
+        }
+        replace(page)
+    }
+
+    private fun dateRangeControls(
+        startDate: LocalDate?,
+        endDate: LocalDate?,
+        onChanged: (LocalDate?, LocalDate?) -> Unit
+    ): View {
+        var start = startDate
+        var end = endDate
+        lateinit var startButton: Button
+        lateinit var endButton: Button
+        fun refresh() {
+            startButton.text = start?.toString() ?: "开始日期"
+            endButton.text = end?.toString() ?: "结束日期"
+            onChanged(start, end)
+        }
+        return verticalBox().apply {
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(smallButton("全部日期") {
+                    start = null
+                    end = null
+                    refresh()
+                })
+                addView(smallButton("本月") {
+                    val month = YearMonth.from(LocalDate.now())
+                    start = month.atDay(1)
+                    end = month.atEndOfMonth()
+                    refresh()
+                })
+            })
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                startButton = periodButton(start?.toString() ?: "开始日期") {
+                    pickDate(start ?: defaultSearchStartDate()) { picked ->
+                        start = picked
+                        refresh()
+                    }
+                }
+                endButton = periodButton(end?.toString() ?: "结束日期") {
+                    pickDate(end ?: defaultSearchEndDate()) { picked ->
+                        end = picked
+                        refresh()
+                    }
+                }
+                addView(startButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply {
+                    setMargins(0, 0, dp(6), 0)
+                })
+                addView(endButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply {
+                    setMargins(dp(6), 0, 0, 0)
+                })
+            })
+        }
+    }
+
+    private fun searchBills(
+        keyword: String,
+        startDate: LocalDate?,
+        endDate: LocalDate?,
+        mode: BillMode?,
+        minAmount: String,
+        maxAmount: String
+    ): List<Bill> {
+        return repository.searchBills(
+            keyword = keyword,
+            startDate = startDate,
+            endDate = endDate,
+            mode = mode,
+            minAmount = minAmount.toDoubleOrNull(),
+            maxAmount = maxAmount.toDoubleOrNull()
+        )
+    }
+
+    private fun selectedSearchMode(group: RadioGroup): BillMode? =
+        when (selectedRadioTag(group, BillMode.Export.name)) {
+            BillMode.Import.name -> BillMode.Import
+            SEARCH_MODE_ALL -> null
+            else -> BillMode.Export
+        }
+
+    private fun defaultSearchStartDate(): LocalDate =
+        YearMonth.from(LocalDate.now()).atDay(1)
+
+    private fun defaultSearchEndDate(): LocalDate =
+        YearMonth.from(LocalDate.now()).atEndOfMonth()
+
     private fun addBillSummary(page: LinearLayout, summary: BillSummary, heading: String) {
         page.addView(card(verticalBox().apply {
-            addView(sectionTitle(heading))
-            addView(metricRow("收入", money(summary.income), Good))
-            addView(metricRow("支出", money(summary.expense), Danger))
-            addView(metricRow("结余", money(summary.balance), if (summary.balance >= 0) Good else Danger))
-            addView(metricRow("笔数", "${summary.count}", TextMain))
+            addView(sectionTitle("$heading 总览"))
+            addView(summaryMetricRow(
+                summaryMetric("收入", money(summary.income), Good),
+                summaryMetric("支出", money(summary.expense), Danger)
+            ))
+            addView(summaryMetricRow(
+                summaryMetric("结余", money(summary.balance), if (summary.balance >= 0) Good else Danger),
+                summaryMetric("笔数", "${summary.count}", TextMain)
+            ))
         }))
+    }
+
+    private fun addStatsContent(page: LinearLayout, scope: StatsScope, report: StatsReport) {
+        page.addView(sectionTitle("${periodTitle(scope)}统计"))
+        page.addView(categoryCard("支出按类别", report.expenseCategories, ChartMode.Pie))
+        page.addView(largestExpenseCard(billsFor(scope)))
+        page.addView(categoryCard("收入按类别", report.incomeCategories, ChartMode.Pie))
     }
 
     private fun categoryCard(title: String, stats: List<CategorySummary>, mode: ChartMode): View {
@@ -416,6 +627,50 @@ class MainActivity : Activity() {
         }
         return card(box)
     }
+
+    private fun largestExpenseCard(bills: List<Bill>): View {
+        val expenses = bills
+            .filter { it.mode == BillMode.Export }
+            .sortedByDescending { it.amount }
+            .take(LARGEST_EXPENSE_LIMIT)
+        val box = verticalBox()
+        box.addView(sectionTitle("支出金额最大10笔"))
+        if (expenses.isEmpty()) {
+            box.addView(text("暂无支出"))
+        } else {
+            expenses.forEachIndexed { index, bill ->
+                box.addView(rankedBillRow(index + 1, bill))
+            }
+        }
+        return card(box)
+    }
+
+    private fun rankedBillRow(rank: Int, bill: Bill): View =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(8), 0, dp(8))
+            addView(text("$rank.").apply {
+                setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+                setTextColor(TextMuted)
+                layoutParams = LinearLayout.LayoutParams(dp(34), -2)
+            })
+            addView(verticalBox().apply {
+                addView(text(bill.typeLabel))
+                val note = listOf(bill.date.toString(), bill.remark)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · ")
+                addView(text(note, small = true))
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(text(money(bill.amount)).apply {
+                setTextColor(Danger)
+                gravity = Gravity.END
+            })
+            setOnClickListener {
+                editingBill = bill
+                showRecord()
+            }
+        }
 
     private fun trendCard(title: String, scope: StatsScope, mode: BillMode): View {
         val box = verticalBox()
@@ -743,8 +998,11 @@ class MainActivity : Activity() {
         page.addView(card(verticalBox().apply {
             addView(sectionTitle("数据"))
             addView(primaryButton("导出 JSON") {
-                val file = backupFiles.exportToFile(repository.exportJson())
-                toast("已导出: ${file.absolutePath}")
+                startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_TITLE, defaultExportFileName())
+                }, REQ_EXPORT_JSON)
             })
             addView(outlineButton("导入 JSON") {
                 startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -998,6 +1256,29 @@ class MainActivity : Activity() {
         })
     }
 
+    private fun summaryMetricRow(left: View, right: View): View =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(left, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                setMargins(0, dp(4), dp(8), dp(4))
+            })
+            addView(right, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                setMargins(dp(8), dp(4), 0, dp(4))
+            })
+        }
+
+    private fun summaryMetric(name: String, value: String, color: Int): View =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(4), 0, dp(4))
+            addView(text(name, small = true))
+            addView(text(value).apply {
+                textSize = 20f
+                setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+                setTextColor(color)
+            })
+        }
+
     private fun input(hint: String, value: String = "", decimal: Boolean = false): EditText =
         EditText(this).apply {
             this.hint = hint
@@ -1121,6 +1402,9 @@ class MainActivity : Activity() {
             (e.year - s.year) * 12 + e.monthValue - s.monthValue + 1
         }.getOrDefault(1)
 
+    private fun defaultExportFileName(): String =
+        "bookkeeping-${LocalDateTime.now().format(ExportFileNameFormatter)}.json"
+
     private fun toast(value: String) = Toast.makeText(this, value, Toast.LENGTH_SHORT).show()
 
     private fun money(value: Double): String = String.format(Locale.CHINA, "¥%.2f", value)
@@ -1135,13 +1419,17 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQ_IMPORT_JSON = 1001
+        private const val REQ_EXPORT_JSON = 1002
         private const val DETAIL_LIMIT = 300
+        private const val LARGEST_EXPENSE_LIMIT = 10
+        private const val SEARCH_MODE_ALL = "All"
         private val Bg = Color.rgb(247, 248, 250)
         private val Primary = Color.rgb(30, 107, 92)
         private val TextMain = Color.rgb(36, 48, 44)
         private val TextMuted = Color.rgb(102, 112, 108)
         private val Good = Color.rgb(28, 128, 95)
         private val Danger = Color.rgb(196, 72, 72)
+        private val ExportFileNameFormatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
         private val Palette = listOf(
             Color.rgb(30, 107, 92),
             Color.rgb(46, 125, 170),
